@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, GitHub } from "lucide-react";
+import { ExternalLink, Github } from "lucide-react";
 
 export const AboutApp = () => {
   return (
@@ -90,7 +90,7 @@ export const AboutApp = () => {
 
           <div className="flex flex-wrap gap-3 mt-6">
             <Button variant="outline" size="sm" className="h-9">
-              <GitHub className="ml-2 h-4 w-4" />
+              <Github className="ml-2 h-4 w-4" />
               مستودع المشروع
             </Button>
             <Button variant="outline" size="sm" className="h-9">

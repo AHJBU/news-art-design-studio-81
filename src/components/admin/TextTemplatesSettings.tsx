@@ -40,7 +40,7 @@ export const TextTemplatesSettings = () => {
     {
       id: 2,
       name: "اقتباس",
-      content: "" [النص هنا] "",
+      content: """ [النص هنا] """,
       category: "اقتباسات",
     },
     {

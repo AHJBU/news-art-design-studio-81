@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Trash } from "lucide-react";
 
 // Type definitions for censorship data
-interface CensorshipWord {
+export interface CensorshipWord {
   id: number;
   original: string;
   replacement: string;
@@ -31,7 +31,19 @@ const CensorshipSettings = () => {
       { id: 3, original: "الاحتلال", replacement: "الآحـتلال" }
     ];
     
-    setWords(initialWords);
+    // استدعاء API لجلب قائمة الكلمات من ملف الإعدادات
+    fetch('/api/censorship/words')
+      .then(response => {
+        if (response.ok) return response.json();
+        return initialWords; // استخدام القائمة الافتراضية كاحتياطي
+      })
+      .then(data => {
+        setWords(Array.isArray(data) && data.length > 0 ? data : initialWords);
+      })
+      .catch(error => {
+        console.error("Error fetching censorship words:", error);
+        setWords(initialWords);
+      });
   }, []);
 
   const addWord = () => {
@@ -72,17 +84,29 @@ const CensorshipSettings = () => {
     setIsSaving(true);
     
     try {
-      // In a real implementation, this would be an API call to save the words
-      // For this example, we'll simulate a successful API call
-      console.log("Saving censorship words:", wordList);
+      // إرسال القائمة المحدثة إلى API لحفظها في ملف الإعدادات
+      const response = await fetch('/api/censorship/words', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(wordList),
+      });
       
-      // Simulate API delay
+      if (!response.ok) {
+        throw new Error('فشل حفظ البيانات');
+      }
+      
+      // للمحاكاة، سنضيف تأخيراً صغيراً
       await new Promise(resolve => setTimeout(resolve, 500));
       
       toast({
         title: "تم الحفظ بنجاح",
         description: "تم حفظ إعدادات الرقابة"
       });
+      
+      // تحديث localStorage للاستخدام المستقبلي
+      localStorage.setItem('censorshipWords', JSON.stringify(wordList));
     } catch (error) {
       toast({
         title: "خطأ في الحفظ",

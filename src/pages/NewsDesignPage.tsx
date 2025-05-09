@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter
 } from "@/components/ui/card";
 import {
   Tabs,
@@ -26,24 +27,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  LayoutDashboard,
-  Image as ImageIcon,
   Text,
-  FileText,
-  Pencil,
-  SquareDashed,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ArrowDown,
   Save,
-  Share2,
-  ZoomIn,
-  ZoomOut,
   Grid,
   Download,
   Trash,
-  Move
 } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -133,9 +121,34 @@ const NewsDesignPage = () => {
   const [textStroke, setTextStroke] = useState(false);
   const [textStrokeColor, setTextStrokeColor] = useState("#000000");
   const [textBackgroundColor, setTextBackgroundColor] = useState("transparent");
+  const [fileName, setFileName] = useState(`تصميم_${new Date().toLocaleDateString('ar-EG').replace(/\//g, '-')}`);
+  const [fileFormat, setFileFormat] = useState("png");
+  const [keepRatio, setKeepRatio] = useState(true);
+  const [transparentBg, setTransparentBg] = useState(false);
+  const [includeTextBg, setIncludeTextBg] = useState(false);
+  
+  // كائن الصورة الذي سنستخدمه للتصدير
+  const templateImg = useRef<HTMLImageElement | null>(null);
 
   const selectedTemplate = templateData.find(template => template.id === selectedTemplateId) || templateData[0];
   const selectedVariant = selectedTemplate.variants.find(variant => variant.id === selectedVariantId) || selectedTemplate.variants[0];
+
+  // تحميل الصورة المختارة مسبقاً
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = "anonymous"; // مهم للتعامل مع CORS
+    img.src = selectedVariant.url;
+    img.onload = () => {
+      templateImg.current = img;
+    };
+  }, [selectedVariant.url]);
+
+  // عند تحميل الصفحة، نضيف مربع نص افتراضي في المنتصف
+  useEffect(() => {
+    if (textElements.length === 0) {
+      handleAddText();
+    }
+  }, []);
 
   const handleTemplateChange = (templateId: string) => {
     const id = parseInt(templateId, 10);
@@ -165,12 +178,19 @@ const NewsDesignPage = () => {
   };
 
   const handleAddText = () => {
+    if (!canvasRef.current) return;
+
+    // الحصول على أبعاد مساحة العمل
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const centerX = canvasRect.width / 2 - 100; // نصف عرض مربع النص تقريبًا
+    const centerY = canvasRect.height / 2 - 25; // نصف ارتفاع مربع النص تقريبًا
+
     const newId = textCounter + 1;
     const newText = {
       id: newId,
       content: "نص جديد",
-      x: 50,
-      y: 50 + (textElements.length * 30),
+      x: centerX,
+      y: centerY,
       font: selectedFont,
       size: fontSize,
       color: textColor,
@@ -184,8 +204,8 @@ const NewsDesignPage = () => {
       stroke: textStroke,
       strokeColor: textStrokeColor,
       backgroundColor: textBackgroundColor,
-      width: 200,
-      height: 50
+      width: 200, // عرض كافٍ لسطرين
+      height: 50  // ارتفاع كافٍ لسطرين
     };
     
     setTextElements([...textElements, newText]);
@@ -289,6 +309,15 @@ const NewsDesignPage = () => {
   };
 
   const handleExportDesign = () => {
+    if (!templateImg.current) {
+      toast({
+        title: "خطأ في التصدير",
+        description: "الرجاء الانتظار حتى تحميل الصورة بالكامل",
+        variant: "destructive"
+      });
+      return;
+    }
+
     toast({
       title: "جاري تصدير التصميم",
       description: "سيتم تنزيل الصورة قريباً"
@@ -297,75 +326,88 @@ const NewsDesignPage = () => {
     try {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
+      
       if (!ctx) {
         throw new Error("Could not create canvas context");
       }
       
-      // Set canvas dimensions to match the template image
-      const templateImg = new Image();
-      templateImg.onload = () => {
-        canvas.width = templateImg.width;
-        canvas.height = templateImg.height;
+      // حجم الصورة المستخدمة (الأصلية)
+      const img = templateImg.current;
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      
+      // رسم صورة القالب
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // حساب النسبة بين أبعاد الصورة الأصلية والمعروضة
+      const canvasElement = canvasRef.current;
+      if (!canvasElement) return;
+      
+      const displayedRect = canvasElement.getBoundingClientRect();
+      const scaleX = img.naturalWidth / displayedRect.width;
+      const scaleY = img.naturalHeight / displayedRect.height;
+      
+      // رسم جميع عناصر النص
+      textElements.forEach(text => {
+        ctx.save();
         
-        // Draw template image
-        ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+        // تطبيق تنسيقات النص
+        let fontStyle = '';
+        if (text.bold) fontStyle += 'bold ';
+        if (text.italic) fontStyle += 'italic ';
+        fontStyle += `${text.size * scaleY}px ${text.font}`;
+        ctx.font = fontStyle;
+        ctx.fillStyle = text.color;
+        ctx.textAlign = text.align as CanvasTextAlign;
+        ctx.direction = text.direction === 'rtl' ? 'rtl' : 'ltr';
         
-        // Calculate scale factor between original image and displayed version
-        const displayedElem = canvasRef.current;
-        if (!displayedElem) return;
+        if (text.shadow) {
+          ctx.shadowColor = text.shadowColor;
+          ctx.shadowBlur = 4 * scaleY;
+          ctx.shadowOffsetX = 2 * scaleX;
+          ctx.shadowOffsetY = 2 * scaleY;
+        }
         
-        const displayedRect = displayedElem.getBoundingClientRect();
-        const scaleX = templateImg.width / displayedRect.width;
-        const scaleY = templateImg.height / displayedRect.height;
+        if (text.stroke) {
+          ctx.strokeStyle = text.strokeColor;
+          ctx.lineWidth = 2 * scaleY;
+        }
         
-        // Draw all text elements
-        textElements.forEach(text => {
-          ctx.save();
-          
-          // Apply text styles
-          ctx.font = `${text.bold ? 'bold ' : ''}${text.italic ? 'italic ' : ''}${text.size * scaleY}px ${text.font}`;
-          ctx.fillStyle = text.color;
-          ctx.textAlign = text.align as CanvasTextAlign;
-          
-          if (text.shadow) {
-            ctx.shadowColor = text.shadowColor;
-            ctx.shadowBlur = 4 * scaleY;
-            ctx.shadowOffsetX = 2 * scaleX;
-            ctx.shadowOffsetY = 2 * scaleY;
-          }
+        // رسم النص مع مراعاة الرجوع للسطر التالي
+        const lines = text.content.split('\n');
+        const lineHeight = text.size * 1.2; // ارتفاع السطر (1.2 من حجم النص)
+        
+        lines.forEach((line: string, index: number) => {
+          const yPosition = text.y * scaleY + (index * lineHeight * scaleY);
           
           if (text.stroke) {
-            ctx.strokeStyle = text.strokeColor;
-            ctx.lineWidth = 2 * scaleY;
-            ctx.strokeText(text.content, text.x * scaleX, text.y * scaleY);
+            ctx.strokeText(line, text.x * scaleX, yPosition);
           }
           
-          ctx.fillText(text.content, text.x * scaleX, text.y * scaleY);
-          ctx.restore();
+          ctx.fillText(line, text.x * scaleX, yPosition);
         });
         
-        // Convert to image and download
-        const dataURL = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.href = dataURL;
-        link.download = `تصميم_إخباري_${new Date().toLocaleDateString('ar-EG').replace(/\//g, '-')}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        toast({
-          title: "تم التصدير بنجاح",
-          description: "تم حفظ التصميم بنجاح"
-        });
-      };
+        ctx.restore();
+      });
       
-      templateImg.src = selectedVariant.url;
+      // تحويل إلى صورة وتنزيلها
+      const dataURL = canvas.toDataURL(`image/${fileFormat}`, 1.0);
+      const link = document.createElement('a');
+      link.href = dataURL;
+      link.download = `${fileName}.${fileFormat}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
+      toast({
+        title: "تم التصدير بنجاح",
+        description: "تم حفظ التصميم بنجاح"
+      });
     } catch (error) {
       console.error("Export error:", error);
       toast({
         title: "خطأ في التصدير",
-        description: "حدث خطأ أثناء تصدير التصميم",
+        description: "حدث خطأ أثناء تصدير التصميم. تأكد من أن الصور محملة بشكل صحيح.",
         variant: "destructive"
       });
     }
@@ -398,11 +440,9 @@ const NewsDesignPage = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-6 w-full justify-start">
             <TabsTrigger value="design" className="flex items-center gap-2">
-              <LayoutDashboard className="h-4 w-4" />
               التصميم
             </TabsTrigger>
             <TabsTrigger value="export" className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
               التصدير
             </TabsTrigger>
           </TabsList>
@@ -686,11 +726,11 @@ const NewsDesignPage = () => {
                   <CardHeader className="border-b flex-row justify-between items-center py-3 px-4">
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon" onClick={handleZoomOut} disabled={zoomLevel <= 50}>
-                        <ZoomOut className="h-4 w-4" />
+                        <span className="text-lg">-</span>
                       </Button>
                       <span>{zoomLevel}%</span>
                       <Button variant="ghost" size="icon" onClick={handleZoomIn} disabled={zoomLevel >= 200}>
-                        <ZoomIn className="h-4 w-4" />
+                        <span className="text-lg">+</span>
                       </Button>
                     </div>
                     <div className="flex items-center gap-2">
@@ -699,8 +739,8 @@ const NewsDesignPage = () => {
                         تصدير
                       </Button>
                       <Button variant="outline" size="sm" className="h-8" onClick={handleShareDesign}>
-                        <Share2 className="h-4 w-4 ml-1" />
-                        مشاركة
+                        <Save className="h-4 w-4 ml-1" />
+                        حفظ
                       </Button>
                     </div>
                   </CardHeader>
@@ -739,6 +779,7 @@ const NewsDesignPage = () => {
                           src={selectedVariant.url} 
                           alt={selectedVariant.name}
                           className="w-full h-full object-cover"
+                          crossOrigin="anonymous"
                         />
                         
                         {/* Text Elements */}
@@ -772,7 +813,7 @@ const NewsDesignPage = () => {
                             
                             {/* Resize handle - only shown when element is active */}
                             {activeTextId === text.id && (
-                              <div className="absolute bottom-0 left-0 w-8 h-8 bg-primary opacity-50 cursor-nwse-resize"
+                              <div className="absolute bottom-0 right-0 w-5 h-5 bg-primary opacity-50 cursor-nwse-resize"
                                   onMouseDown={(e) => {
                                     e.stopPropagation();
                                     const startWidth = text.width || 200;
@@ -828,14 +869,19 @@ const NewsDesignPage = () => {
                       <Input 
                         id="fileName" 
                         placeholder="اسم الملف" 
-                        defaultValue={`تصميم_${new Date().toLocaleDateString('ar-EG').replace(/\//g, '-')}`} 
+                        value={fileName}
+                        onChange={(e) => setFileName(e.target.value)}
                         className="mt-1"
                       />
                     </div>
                     
                     <div>
                       <Label>تنسيق الملف</Label>
-                      <RadioGroup defaultValue="png" className="mt-2">
+                      <RadioGroup 
+                        value={fileFormat} 
+                        onValueChange={setFileFormat}
+                        className="mt-2"
+                      >
                         <div className="flex items-center space-x-2 rtl:space-x-reverse">
                           <RadioGroupItem value="png" id="png" />
                           <Label htmlFor="png">PNG</Label>
@@ -851,15 +897,33 @@ const NewsDesignPage = () => {
                       <Label>خيارات متقدمة</Label>
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                          <input type="checkbox" id="keep-ratio" className="rounded text-primary" defaultChecked />
+                          <input 
+                            type="checkbox" 
+                            id="keep-ratio" 
+                            className="rounded text-primary"
+                            checked={keepRatio}
+                            onChange={(e) => setKeepRatio(e.target.checked)}
+                          />
                           <label htmlFor="keep-ratio">الحفاظ على الأبعاد الأصلية</label>
                         </div>
                         <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                          <input type="checkbox" id="transparent-bg" className="rounded text-primary" />
+                          <input 
+                            type="checkbox" 
+                            id="transparent-bg" 
+                            className="rounded text-primary"
+                            checked={transparentBg}
+                            onChange={(e) => setTransparentBg(e.target.checked)}
+                          />
                           <label htmlFor="transparent-bg">خلفية شفافة (PNG فقط)</label>
                         </div>
                         <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                          <input type="checkbox" id="include-text-bg" className="rounded text-primary" />
+                          <input 
+                            type="checkbox" 
+                            id="include-text-bg" 
+                            className="rounded text-primary"
+                            checked={includeTextBg}
+                            onChange={(e) => setIncludeTextBg(e.target.checked)}
+                          />
                           <label htmlFor="include-text-bg">إظهار خلفيات النصوص</label>
                         </div>
                       </div>
@@ -872,7 +936,8 @@ const NewsDesignPage = () => {
                         <img 
                           src={selectedVariant.url} 
                           alt="معاينة التصدير" 
-                          className="max-h-[200px] max-w-full object-contain mx-auto" 
+                          className="max-h-[200px] max-w-full object-contain mx-auto"
+                          crossOrigin="anonymous"
                         />
                       </div>
                       <div className="text-sm text-muted-foreground mb-2">

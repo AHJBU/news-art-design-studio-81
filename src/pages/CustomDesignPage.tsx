@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Image,
+  Image as ImageIcon,
   Text,
   Pencil,
   SquareDashed,
@@ -91,6 +91,8 @@ const CustomDesignPage = () => {
   const [textElements, setTextElements] = useState<any[]>([]);
   const [logoElements, setLogoElements] = useState<any[]>([]);
   const [textContent, setTextContent] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   
   // Text editing states
   const [selectedFont, setSelectedFont] = useState("Cairo");
@@ -131,11 +133,11 @@ const CustomDesignPage = () => {
       setUploadedImage(result);
 
       // Calculate aspect ratio
-      const img = new Image();
-      img.onload = () => {
-        setImageAspectRatio(img.width / img.height);
+      const imgElement = document.createElement('img');
+      imgElement.onload = () => {
+        setImageAspectRatio(imgElement.width / imgElement.height);
       };
-      img.src = result;
+      imgElement.src = result;
 
       toast({
         title: "تم رفع الصورة بنجاح",
@@ -186,7 +188,9 @@ const CustomDesignPage = () => {
       shadowColor: textShadowColor,
       stroke: textStroke,
       strokeColor: textStrokeColor,
-      backgroundColor: textBackgroundColor
+      backgroundColor: textBackgroundColor,
+      width: 200,
+      height: 50
     };
     
     setTextElements([...textElements, newText]);
@@ -242,6 +246,83 @@ const CustomDesignPage = () => {
     }
   };
 
+  // New drag handling functions
+  const handleElementMouseDown = (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    setActiveElementId(id);
+    setIsDragging(true);
+
+    // Find the element being dragged
+    const textElement = textElements.find(el => el.id === id);
+    const logoElement = logoElements.find(el => el.id === id);
+    const element = textElement || logoElement;
+    
+    if (element) {
+      const rect = (e.target as HTMLElement).getBoundingClientRect();
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
+
+    // Text elements specific handling
+    if (textElement) {
+      setTextContent(textElement.content);
+      setSelectedFont(textElement.font);
+      setFontSize(textElement.size);
+      setTextAlign(textElement.align);
+      setTextColor(textElement.color);
+      setTextDirection(textElement.direction);
+      setTextBold(textElement.bold);
+      setTextItalic(textElement.italic);
+      setTextUnderline(textElement.underline);
+      setTextShadow(textElement.shadow);
+      setTextShadowColor(textElement.shadowColor);
+      setTextStroke(textElement.stroke);
+      setTextStrokeColor(textElement.strokeColor);
+      setTextBackgroundColor(textElement.backgroundColor);
+    }
+    
+    // Logo elements specific handling
+    if (logoElement) {
+      setSelectedLogoOpacity(logoElement.opacity);
+      setSelectedLogoSize(logoElement.size);
+    }
+  };
+
+  const handleElementMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || activeElementId === null) return;
+    
+    const workspace = document.getElementById('design-workspace');
+    if (!workspace) return;
+    
+    const workspaceRect = workspace.getBoundingClientRect();
+    const newX = e.clientX - workspaceRect.left - dragOffset.x;
+    const newY = e.clientY - workspaceRect.top - dragOffset.y;
+    
+    // Update text elements
+    const textElement = textElements.find(el => el.id === activeElementId);
+    if (textElement) {
+      setTextElements(textElements.map(text => 
+        text.id === activeElementId ? { ...text, x: newX, y: newY } : text
+      ));
+      return;
+    }
+    
+    // Update logo elements
+    const logoElement = logoElements.find(el => el.id === activeElementId);
+    if (logoElement) {
+      setLogoElements(logoElements.map(logo => 
+        logo.id === activeElementId ? { ...logo, x: newX, y: newY } : logo
+      ));
+      return;
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
   const updateActiveTextStyle = (property: string, value: any) => {
     if (activeElementId === null) return;
     
@@ -249,6 +330,17 @@ const CustomDesignPage = () => {
     if (activeElement) {
       setTextElements(textElements.map(text => 
         text.id === activeElementId ? { ...text, [property]: value } : text
+      ));
+    }
+  };
+
+  const resizeTextElement = (width: number, height: number) => {
+    if (activeElementId === null) return;
+    
+    const activeElement = textElements.find(text => text.id === activeElementId);
+    if (activeElement) {
+      setTextElements(textElements.map(text => 
+        text.id === activeElementId ? { ...text, width, height } : text
       ));
     }
   };
@@ -302,13 +394,127 @@ const CustomDesignPage = () => {
       description: "سيتم تنزيل الصورة قريباً"
     });
     
-    // هنا يمكن إضافة آلية فعلية لتصدير التصميم
-    setTimeout(() => {
+    // Export implementation
+    try {
+      const workspace = document.getElementById('design-workspace');
+      if (!workspace) {
+        throw new Error("Element not found");
+      }
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error("Could not create canvas context");
+      }
+      
+      const rect = workspace.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      
+      // Create a new image for the background
+      const img = new Image();
+      img.onload = () => {
+        // Draw background image
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Draw text elements
+        textElements.forEach(text => {
+          ctx.save();
+          ctx.font = `${text.bold ? 'bold ' : ''}${text.italic ? 'italic ' : ''}${text.size}px ${text.font}`;
+          ctx.fillStyle = text.color;
+          ctx.textAlign = text.align as CanvasTextAlign;
+          ctx.textBaseline = 'top';
+          
+          if (text.shadow) {
+            ctx.shadowColor = text.shadowColor;
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+          }
+          
+          if (text.stroke) {
+            ctx.strokeStyle = text.strokeColor;
+            ctx.lineWidth = 2;
+            ctx.strokeText(text.content, text.x, text.y);
+          }
+          
+          ctx.fillText(text.content, text.x, text.y);
+          ctx.restore();
+        });
+        
+        // Draw logo elements
+        logoElements.forEach(logo => {
+          const logoImg = new Image();
+          logoImg.onload = () => {
+            ctx.save();
+            ctx.globalAlpha = logo.opacity / 100;
+            
+            const scale = logo.size / 100;
+            const width = logoImg.width * scale;
+            const height = logoImg.height * scale;
+            
+            ctx.drawImage(logoImg, logo.x, logo.y, width, height);
+            ctx.restore();
+            
+            // After the last element is drawn, export the canvas
+            const lastLogo = logoElements[logoElements.length - 1];
+            if (logo.id === lastLogo.id) {
+              // Convert canvas to image and trigger download
+              const dataURL = canvas.toDataURL('image/png');
+              const link = document.createElement('a');
+              link.download = `تصميم_مخصص_${new Date().toLocaleDateString('ar-EG').replace(/\//g, '-')}.png`;
+              link.href = dataURL;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              toast({
+                title: "تم التصدير بنجاح",
+                description: "تم حفظ التصميم بنجاح"
+              });
+            }
+          };
+          logoImg.src = logo.url;
+        });
+        
+        // If there are no logos, export the canvas immediately
+        if (logoElements.length === 0) {
+          const dataURL = canvas.toDataURL('image/png');
+          const link = document.createElement('a');
+          link.download = `تصميم_مخصص_${new Date().toLocaleDateString('ar-EG').replace(/\//g, '-')}.png`;
+          link.href = dataURL;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          toast({
+            title: "تم التصدير بنجاح",
+            description: "تم حفظ التصميم بنجاح"
+          });
+        }
+      };
+      img.src = uploadedImage;
+      
+    } catch (error) {
+      console.error("Export error:", error);
       toast({
-        title: "تم التصدير بنجاح",
-        description: "تم حفظ التصميم بنجاح"
+        title: "خطأ في التصدير",
+        description: "حدث خطأ أثناء تصدير التصميم",
+        variant: "destructive"
       });
-    }, 1500);
+    }
+  };
+
+  const handleZoomIn = () => {
+    if (zoomLevel < 200) {
+      setZoomLevel(prevZoom => prevZoom + 10);
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (zoomLevel > 50) {
+      setZoomLevel(prevZoom => prevZoom - 10);
+    }
   };
 
   return (
@@ -352,7 +558,7 @@ const CustomDesignPage = () => {
                     onClick={() => fileInputRef.current?.click()}
                     className="gap-2"
                   >
-                    <Image className="h-4 w-4" />
+                    <ImageIcon className="h-4 w-4" />
                     اختيار صورة
                   </Button>
                 </CardContent>
@@ -380,7 +586,7 @@ const CustomDesignPage = () => {
                           className="flex flex-col h-auto py-3"
                           onClick={() => fileInputRef.current?.click()}
                         >
-                          <Image className="h-5 w-5 mb-1" />
+                          <ImageIcon className="h-5 w-5 mb-1" />
                           <span>تغيير الصورة</span>
                         </Button>
                         <Button 
@@ -702,7 +908,7 @@ const CustomDesignPage = () => {
                       />
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" className="h-8" onClick={() => fileInputRef.current?.click()}>
-                          <Image className="h-4 w-4 ml-1" />
+                          <ImageIcon className="h-4 w-4 ml-1" />
                           تغيير الصورة
                         </Button>
                         <Button variant="outline" size="sm" className="h-8" onClick={handleExportDesign}>
@@ -713,6 +919,7 @@ const CustomDesignPage = () => {
                     </CardHeader>
                     <CardContent className="flex items-center justify-center p-0 min-h-[500px] bg-muted/30 overflow-auto">
                       <div 
+                        id="design-workspace"
                         className="relative"
                         style={{
                           transform: `scale(${zoomLevel / 100})`,
@@ -720,9 +927,12 @@ const CustomDesignPage = () => {
                           maxWidth: '100%',
                           margin: '20px 0'
                         }}
+                        onMouseMove={isDragging ? handleElementMouseMove : undefined}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
                       >
-                        <div className="absolute inset-0 pointer-events-none">
-                          {showGrid && (
+                        {showGrid && (
+                          <div className="absolute inset-0 pointer-events-none">
                             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
                               <defs>
                                 <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -731,8 +941,8 @@ const CustomDesignPage = () => {
                               </defs>
                               <rect width="100%" height="100%" fill="url(#grid)" />
                             </svg>
-                          )}
-                        </div>
+                          </div>
+                        )}
                         
                         <div className="relative">
                           {uploadedImage && (
@@ -747,7 +957,7 @@ const CustomDesignPage = () => {
                           {textElements.map((text) => (
                             <div 
                               key={text.id}
-                              className={`absolute cursor-move p-2 ${activeElementId === text.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                              className={`absolute cursor-move ${activeElementId === text.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                               style={{
                                 left: `${text.x}px`,
                                 top: `${text.y}px`,
@@ -763,27 +973,46 @@ const CustomDesignPage = () => {
                                 backgroundColor: text.backgroundColor !== 'transparent' ? text.backgroundColor : 'transparent',
                                 WebkitTextStroke: text.stroke ? `1px ${text.strokeColor}` : 'none',
                                 padding: '4px',
-                                maxWidth: '80%'
+                                width: text.width ? `${text.width}px` : 'auto',
+                                minWidth: '30px',
+                                minHeight: '20px'
                               }}
-                              onClick={() => {
-                                setActiveElementId(text.id);
-                                setTextContent(text.content);
-                                setSelectedFont(text.font);
-                                setFontSize(text.size);
-                                setTextAlign(text.align);
-                                setTextColor(text.color);
-                                setTextDirection(text.direction);
-                                setTextBold(text.bold);
-                                setTextItalic(text.italic);
-                                setTextUnderline(text.underline);
-                                setTextShadow(text.shadow);
-                                setTextShadowColor(text.shadowColor);
-                                setTextStroke(text.stroke);
-                                setTextStrokeColor(text.strokeColor);
-                                setTextBackgroundColor(text.backgroundColor);
-                              }}
+                              onMouseDown={(e) => handleElementMouseDown(e, text.id)}
                             >
                               {text.content || "نص جديد"}
+                              
+                              {/* Resize handle - only shown when element is active */}
+                              {activeElementId === text.id && (
+                                <div className="absolute bottom-0 left-0 w-8 h-8 bg-primary opacity-50 cursor-nwse-resize"
+                                     onMouseDown={(e) => {
+                                       e.stopPropagation();
+                                       const startWidth = text.width || 200;
+                                       const startHeight = text.height || 50;
+                                       const startX = e.clientX;
+                                       const startY = e.clientY;
+                                       
+                                       const handleMouseMove = (moveEvent: MouseEvent) => {
+                                         const dx = moveEvent.clientX - startX;
+                                         const dy = moveEvent.clientY - startY;
+                                         const newWidth = startWidth + dx;
+                                         const newHeight = startHeight + dy;
+                                         
+                                         resizeTextElement(
+                                           Math.max(30, newWidth), 
+                                           Math.max(20, newHeight)
+                                         );
+                                       };
+                                       
+                                       const handleMouseUp = () => {
+                                         document.removeEventListener('mousemove', handleMouseMove);
+                                         document.removeEventListener('mouseup', handleMouseUp);
+                                       };
+                                       
+                                       document.addEventListener('mousemove', handleMouseMove);
+                                       document.addEventListener('mouseup', handleMouseUp);
+                                     }}
+                                ></div>
+                              )}
                             </div>
                           ))}
                           
@@ -800,11 +1029,7 @@ const CustomDesignPage = () => {
                                 transform: `scale(${logo.size / 100})`,
                                 transformOrigin: 'top right'
                               }}
-                              onClick={() => {
-                                setActiveElementId(logo.id);
-                                setSelectedLogoOpacity(logo.opacity);
-                                setSelectedLogoSize(logo.size);
-                              }}
+                              onMouseDown={(e) => handleElementMouseDown(e, logo.id)}
                             >
                               <img 
                                 src={logo.url} 

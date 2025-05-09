@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import {
   LayoutDashboard,
-  Image,
+  Image as ImageIcon,
   Text,
   FileText,
   Pencil,
@@ -41,7 +41,9 @@ import {
   ZoomIn,
   ZoomOut,
   Grid,
-  Download
+  Download,
+  Trash,
+  Move
 } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -102,24 +104,20 @@ const colorOptions = [
   { value: "#264653", label: "كحلي" }
 ];
 
-// افتراض أننا سنجلب هذه البيانات من ملفات التكوين عن طريق API في المستقبل
-const textTemplates = [
-  { id: 1, name: "خبر عاجل", content: "عاجل: [النص هنا]", category: "أخبار" },
-  { id: 2, name: "اقتباس", content: "\" [النص هنا] \"", category: "اقتباسات" },
-  { id: 3, name: "تهنئة", content: "نهنئكم بمناسبة [المناسبة]\nمع أطيب التمنيات بدوام التوفيق", category: "مناسبات" }
-];
-
 const NewsDesignPage = () => {
   const { toast } = useToast();
+  const canvasRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState("design");
-  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
-  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number>(1);
+  const [selectedVariantId, setSelectedVariantId] = useState<number>(1);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [showGrid, setShowGrid] = useState(false);
   const [textContent, setTextContent] = useState("");
   const [activeTextId, setActiveTextId] = useState<number | null>(null);
   const [textElements, setTextElements] = useState<any[]>([]);
   const [textCounter, setTextCounter] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   
   // Text editing states
   const [selectedFont, setSelectedFont] = useState("Cairo");
@@ -136,21 +134,22 @@ const NewsDesignPage = () => {
   const [textStrokeColor, setTextStrokeColor] = useState("#000000");
   const [textBackgroundColor, setTextBackgroundColor] = useState("transparent");
 
-  const selectedTemplate = selectedTemplateId 
-    ? templateData.find(template => template.id === selectedTemplateId) 
-    : null;
-  
-  const selectedVariant = selectedTemplate && selectedVariantId 
-    ? selectedTemplate.variants.find(variant => variant.id === selectedVariantId) 
-    : null;
+  const selectedTemplate = templateData.find(template => template.id === selectedTemplateId) || templateData[0];
+  const selectedVariant = selectedTemplate.variants.find(variant => variant.id === selectedVariantId) || selectedTemplate.variants[0];
 
-  const handleSelectTemplate = (templateId: number) => {
-    setSelectedTemplateId(templateId);
-    setSelectedVariantId(null); // Reset variant selection
+  const handleTemplateChange = (templateId: string) => {
+    const id = parseInt(templateId, 10);
+    setSelectedTemplateId(id);
+    
+    // Find first variant of this template
+    const template = templateData.find(t => t.id === id);
+    if (template && template.variants.length > 0) {
+      setSelectedVariantId(template.variants[0].id);
+    }
   };
 
-  const handleSelectVariant = (variantId: number) => {
-    setSelectedVariantId(variantId);
+  const handleVariantChange = (variantId: string) => {
+    setSelectedVariantId(parseInt(variantId, 10));
   };
 
   const handleZoomIn = () => {
@@ -184,7 +183,9 @@ const NewsDesignPage = () => {
       shadowColor: textShadowColor,
       stroke: textStroke,
       strokeColor: textStrokeColor,
-      backgroundColor: textBackgroundColor
+      backgroundColor: textBackgroundColor,
+      width: 200,
+      height: 50
     };
     
     setTextElements([...textElements, newText]);
@@ -209,6 +210,56 @@ const NewsDesignPage = () => {
     }
   };
 
+  // Element dragging functions
+  const handleTextMouseDown = (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    setActiveTextId(id);
+    setIsDragging(true);
+
+    const text = textElements.find(text => text.id === id);
+    if (text) {
+      const rect = (e.target as HTMLElement).getBoundingClientRect();
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+
+      setTextContent(text.content);
+      setSelectedFont(text.font);
+      setFontSize(text.size);
+      setTextAlign(text.align);
+      setTextColor(text.color);
+      setTextDirection(text.direction);
+      setTextBold(text.bold);
+      setTextItalic(text.italic);
+      setTextUnderline(text.underline);
+      setTextShadow(text.shadow);
+      setTextShadowColor(text.shadowColor);
+      setTextStroke(text.stroke);
+      setTextStrokeColor(text.strokeColor);
+      setTextBackgroundColor(text.backgroundColor);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || activeTextId === null) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left - dragOffset.x;
+    const y = e.clientY - rect.top - dragOffset.y;
+
+    setTextElements(textElements.map(text => 
+      text.id === activeTextId ? { ...text, x, y } : text
+    ));
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
   const updateActiveTextStyle = (property: string, value: any) => {
     if (activeTextId === null) return;
     
@@ -217,19 +268,107 @@ const NewsDesignPage = () => {
     ));
   };
 
+  const resizeTextElement = (width: number, height: number) => {
+    if (activeTextId === null) return;
+    
+    setTextElements(textElements.map(text => 
+      text.id === activeTextId ? { ...text, width, height } : text
+    ));
+  };
+
+  const handleRemoveElement = () => {
+    if (activeTextId === null) return;
+    
+    setTextElements(textElements.filter(text => text.id !== activeTextId));
+    setActiveTextId(null);
+    
+    toast({
+      title: "تم حذف العنصر",
+      description: "تم حذف النص بنجاح"
+    });
+  };
+
   const handleExportDesign = () => {
     toast({
       title: "جاري تصدير التصميم",
       description: "سيتم تنزيل الصورة قريباً"
     });
     
-    // هنا يمكن إضافة آلية فعلية لتصدير التصميم
-    setTimeout(() => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error("Could not create canvas context");
+      }
+      
+      // Set canvas dimensions to match the template image
+      const templateImg = new Image();
+      templateImg.onload = () => {
+        canvas.width = templateImg.width;
+        canvas.height = templateImg.height;
+        
+        // Draw template image
+        ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+        
+        // Calculate scale factor between original image and displayed version
+        const displayedElem = canvasRef.current;
+        if (!displayedElem) return;
+        
+        const displayedRect = displayedElem.getBoundingClientRect();
+        const scaleX = templateImg.width / displayedRect.width;
+        const scaleY = templateImg.height / displayedRect.height;
+        
+        // Draw all text elements
+        textElements.forEach(text => {
+          ctx.save();
+          
+          // Apply text styles
+          ctx.font = `${text.bold ? 'bold ' : ''}${text.italic ? 'italic ' : ''}${text.size * scaleY}px ${text.font}`;
+          ctx.fillStyle = text.color;
+          ctx.textAlign = text.align as CanvasTextAlign;
+          
+          if (text.shadow) {
+            ctx.shadowColor = text.shadowColor;
+            ctx.shadowBlur = 4 * scaleY;
+            ctx.shadowOffsetX = 2 * scaleX;
+            ctx.shadowOffsetY = 2 * scaleY;
+          }
+          
+          if (text.stroke) {
+            ctx.strokeStyle = text.strokeColor;
+            ctx.lineWidth = 2 * scaleY;
+            ctx.strokeText(text.content, text.x * scaleX, text.y * scaleY);
+          }
+          
+          ctx.fillText(text.content, text.x * scaleX, text.y * scaleY);
+          ctx.restore();
+        });
+        
+        // Convert to image and download
+        const dataURL = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataURL;
+        link.download = `تصميم_إخباري_${new Date().toLocaleDateString('ar-EG').replace(/\//g, '-')}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast({
+          title: "تم التصدير بنجاح",
+          description: "تم حفظ التصميم بنجاح"
+        });
+      };
+      
+      templateImg.src = selectedVariant.url;
+      
+    } catch (error) {
+      console.error("Export error:", error);
       toast({
-        title: "تم التصدير بنجاح",
-        description: "تم حفظ التصميم بنجاح"
+        title: "خطأ في التصدير",
+        description: "حدث خطأ أثناء تصدير التصميم",
+        variant: "destructive"
       });
-    }, 1500);
+    }
   };
 
   const handleShareDesign = () => {
@@ -245,28 +384,6 @@ const NewsDesignPage = () => {
         description: "يمكنك مشاركته مع الآخرين الآن"
       });
     }, 1000);
-  };
-
-  const applyTextTemplate = (template: any) => {
-    const content = template.content.replace("[النص هنا]", textContent || "");
-    
-    if (activeTextId !== null) {
-      setTextContent(content);
-      setTextElements(textElements.map(text => 
-        text.id === activeTextId ? { ...text, content } : text
-      ));
-      
-      toast({
-        title: "تم تطبيق القالب",
-        description: `تم تطبيق قالب "${template.name}" على النص المحدد`
-      });
-    } else {
-      toast({
-        title: "لم يتم اختيار نص",
-        description: "الرجاء اختيار نص أو إضافة نص جديد أولاً",
-        variant: "destructive"
-      });
-    }
   };
 
   return (
@@ -291,462 +408,408 @@ const NewsDesignPage = () => {
           </TabsList>
 
           <TabsContent value="design" className="space-y-6">
-            {/* Template Selection Section */}
-            {!selectedTemplateId && (
-              <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {templateData.map((template) => (
-                  <Card key={template.id} className="overflow-hidden">
-                    <CardHeader className="p-4">
-                      <CardTitle className="text-xl">{template.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <div 
-                        className="aspect-square bg-muted relative overflow-hidden cursor-pointer"
-                        onClick={() => handleSelectTemplate(template.id)}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Sidebar - Tools and Elements */}
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">اختيار القالب والأبعاد</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label htmlFor="template">القالب</Label>
+                      <Select
+                        value={selectedTemplateId.toString()}
+                        onValueChange={handleTemplateChange}
                       >
-                        <img 
-                          src={template.variants[0].url} 
-                          alt={template.name}
-                          className="w-full h-full object-cover transition-transform hover:scale-105"
+                        <SelectTrigger id="template" className="mt-1">
+                          <SelectValue placeholder="اختر القالب" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templateData.map(template => (
+                            <SelectItem key={template.id} value={template.id.toString()}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="variant">الأبعاد</Label>
+                      <Select
+                        value={selectedVariantId.toString()}
+                        onValueChange={handleVariantChange}
+                      >
+                        <SelectTrigger id="variant" className="mt-1">
+                          <SelectValue placeholder="اختر الأبعاد" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectedTemplate.variants.map(variant => (
+                            <SelectItem key={variant.id} value={variant.id.toString()}>
+                              {variant.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">الأدوات</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-2">
+                      <Button variant="outline" className="flex flex-col h-auto py-3" onClick={handleAddText}>
+                        <Text className="h-5 w-5 mb-1" />
+                        <span>إضافة نص</span>
+                      </Button>
+                      <Button variant="outline" className="flex flex-col h-auto py-3" onClick={() => setShowGrid(!showGrid)}>
+                        <Grid className="h-5 w-5 mb-1" />
+                        <span>{showGrid ? 'إخفاء الشبكة' : 'إظهار الشبكة'}</span>
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="flex flex-col h-auto py-3"
+                        onClick={handleRemoveElement}
+                        disabled={activeTextId === null}
+                      >
+                        <Trash className="h-5 w-5 mb-1" />
+                        <span>حذف العنصر</span>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Text Editing Options */}
+                {activeTextId !== null && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">تحرير النص</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="textContent">محتوى النص</Label>
+                        <Textarea
+                          id="textContent"
+                          value={textContent}
+                          onChange={handleTextChange}
+                          className="mt-1"
+                          rows={3}
                         />
-                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                          <Button variant="secondary" className="font-bold">
-                            اختيار القالب
+                      </div>
+
+                      <div>
+                        <Label htmlFor="fontSize">حجم الخط</Label>
+                        <div className="flex items-center mt-1">
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="icon"
+                            onClick={() => {
+                              const newSize = Math.max(8, fontSize - 2);
+                              setFontSize(newSize);
+                              updateActiveTextStyle('size', newSize);
+                            }}
+                          >
+                            <span className="text-lg">-</span>
+                          </Button>
+                          <Input
+                            id="fontSize"
+                            type="number"
+                            min="8"
+                            max="120"
+                            value={fontSize}
+                            className="w-16 text-center mx-2"
+                            onChange={(e) => {
+                              const newSize = parseInt(e.target.value);
+                              setFontSize(newSize);
+                              updateActiveTextStyle('size', newSize);
+                            }}
+                          />
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="icon"
+                            onClick={() => {
+                              const newSize = Math.min(120, fontSize + 2);
+                              setFontSize(newSize);
+                              updateActiveTextStyle('size', newSize);
+                            }}
+                          >
+                            <span className="text-lg">+</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="font">نوع الخط</Label>
+                        <Select 
+                          value={selectedFont}
+                          onValueChange={(val) => {
+                            setSelectedFont(val);
+                            updateActiveTextStyle('font', val);
+                          }}
+                        >
+                          <SelectTrigger id="font" className="mt-1">
+                            <SelectValue placeholder="اختر نوع الخط" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {fontOptions.map((font) => (
+                              <SelectItem key={font.value} value={font.value}>{font.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label>محاذاة النص</Label>
+                        <div className="grid grid-cols-3 gap-2 mt-1">
+                          <Button
+                            type="button"
+                            variant={textAlign === "right" ? "default" : "outline"}
+                            className="w-full"
+                            onClick={() => {
+                              setTextAlign("right");
+                              updateActiveTextStyle('align', 'right');
+                            }}
+                          >
+                            يمين
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={textAlign === "center" ? "default" : "outline"}
+                            className="w-full"
+                            onClick={() => {
+                              setTextAlign("center");
+                              updateActiveTextStyle('align', 'center');
+                            }}
+                          >
+                            وسط
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={textAlign === "left" ? "default" : "outline"}
+                            className="w-full"
+                            onClick={() => {
+                              setTextAlign("left");
+                              updateActiveTextStyle('align', 'left');
+                            }}
+                          >
+                            يسار
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>لون النص</Label>
+                        <div className="grid grid-cols-3 gap-2 mt-1">
+                          {colorOptions.map((color) => (
+                            <button
+                              key={color.value}
+                              type="button"
+                              className={`w-full h-8 rounded border ${textColor === color.value ? 'ring-2 ring-primary' : ''}`}
+                              style={{ backgroundColor: color.value }}
+                              onClick={() => {
+                                setTextColor(color.value);
+                                updateActiveTextStyle('color', color.value);
+                              }}
+                              title={color.label}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>تأثيرات النص</Label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          <Button
+                            type="button"
+                            variant={textBold ? "default" : "outline"}
+                            className="w-auto px-3"
+                            onClick={() => {
+                              const newValue = !textBold;
+                              setTextBold(newValue);
+                              updateActiveTextStyle('bold', newValue);
+                            }}
+                          >
+                            عريض
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={textItalic ? "default" : "outline"}
+                            className="w-auto px-3"
+                            onClick={() => {
+                              const newValue = !textItalic;
+                              setTextItalic(newValue);
+                              updateActiveTextStyle('italic', newValue);
+                            }}
+                          >
+                            مائل
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={textUnderline ? "default" : "outline"}
+                            className="w-auto px-3"
+                            onClick={() => {
+                              const newValue = !textUnderline;
+                              setTextUnderline(newValue);
+                              updateActiveTextStyle('underline', newValue);
+                            }}
+                          >
+                            تسطير
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={textShadow ? "default" : "outline"}
+                            className="w-auto px-3"
+                            onClick={() => {
+                              const newValue = !textShadow;
+                              setTextShadow(newValue);
+                              updateActiveTextStyle('shadow', newValue);
+                            }}
+                          >
+                            ظل
                           </Button>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                ))}
-              </section>
-            )}
+                )}
+              </div>
 
-            {/* Variant Selection Section */}
-            {selectedTemplateId && !selectedVariantId && selectedTemplate && (
-              <>
-                <div className="flex items-center mb-6">
-                  <Button 
-                    variant="ghost" 
-                    className="mr-2"
-                    onClick={() => setSelectedTemplateId(null)}
-                  >
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                    رجوع
-                  </Button>
-                  <h2 className="text-xl font-bold">{selectedTemplate.name}: اختر أبعاد التصميم</h2>
-                </div>
-
-                <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {selectedTemplate.variants.map((variant) => (
-                    <Card key={variant.id} className="overflow-hidden">
-                      <CardHeader className="p-4">
-                        <CardTitle className="text-lg">{variant.name}</CardTitle>
-                        <CardDescription>{variant.ratio}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        <div 
-                          className="relative overflow-hidden cursor-pointer"
-                          style={{
-                            aspectRatio: variant.ratio === "1:1" ? "1/1" : 
-                                        variant.ratio === "4:5" ? "4/5" : "9/16"
-                          }}
-                          onClick={() => handleSelectVariant(variant.id)}
-                        >
-                          <img 
-                            src={variant.url} 
-                            alt={variant.name}
-                            className="w-full h-full object-cover transition-transform hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                            <Button variant="secondary" className="font-bold">
-                              اختيار البعد
-                            </Button>
-                          </div>
+              {/* Middle - Design Canvas */}
+              <div className="lg:col-span-2">
+                <Card className="overflow-hidden">
+                  <CardHeader className="border-b flex-row justify-between items-center py-3 px-4">
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="icon" onClick={handleZoomOut} disabled={zoomLevel <= 50}>
+                        <ZoomOut className="h-4 w-4" />
+                      </Button>
+                      <span>{zoomLevel}%</span>
+                      <Button variant="ghost" size="icon" onClick={handleZoomIn} disabled={zoomLevel >= 200}>
+                        <ZoomIn className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" className="h-8" onClick={handleExportDesign}>
+                        <Download className="h-4 w-4 ml-1" />
+                        تصدير
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8" onClick={handleShareDesign}>
+                        <Share2 className="h-4 w-4 ml-1" />
+                        مشاركة
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex items-center justify-center p-0 min-h-[500px] bg-muted/30 overflow-auto">
+                    <div 
+                      ref={canvasRef}
+                      className="relative"
+                      style={{
+                        transform: `scale(${zoomLevel / 100})`,
+                        transition: 'transform 0.2s',
+                        aspectRatio: selectedVariant.ratio === "1:1" ? "1/1" : 
+                                    selectedVariant.ratio === "4:5" ? "4/5" : "9/16",
+                        width: selectedVariant.ratio === "1:1" ? '500px' : 
+                              selectedVariant.ratio === "4:5" ? '400px' : '280px',
+                        maxWidth: '100%'
+                      }}
+                      onMouseMove={isDragging ? handleMouseMove : undefined}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                    >
+                      {showGrid && (
+                        <div className="absolute inset-0 pointer-events-none z-10">
+                          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+                              </pattern>
+                            </defs>
+                            <rect width="100%" height="100%" fill="url(#grid)" />
+                          </svg>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </section>
-              </>
-            )}
-
-            {/* Design Workspace */}
-            {selectedTemplateId && selectedVariantId && selectedTemplate && selectedVariant && (
-              <>
-                <div className="flex items-center mb-6">
-                  <Button 
-                    variant="ghost" 
-                    className="mr-2"
-                    onClick={() => setSelectedVariantId(null)}
-                  >
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                    رجوع للأبعاد
-                  </Button>
-                  <h2 className="text-xl font-bold">
-                    {selectedTemplate.name} - {selectedVariant.name}
-                  </h2>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left Sidebar - Tools and Elements */}
-                  <div className="space-y-6">
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg">الأدوات</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-2">
-                          <Button variant="outline" className="flex flex-col h-auto py-3" onClick={handleAddText}>
-                            <Text className="h-5 w-5 mb-1" />
-                            <span>إضافة نص</span>
-                          </Button>
-                          <Button variant="outline" className="flex flex-col h-auto py-3">
-                            <Image className="h-5 w-5 mb-1" />
-                            <span>إضافة صورة</span>
-                          </Button>
-                          <Button variant="outline" className="flex flex-col h-auto py-3" onClick={() => setShowGrid(!showGrid)}>
-                            <Grid className="h-5 w-5 mb-1" />
-                            <span>{showGrid ? 'إخفاء الشبكة' : 'إظهار الشبكة'}</span>
-                          </Button>
-                          <Button variant="outline" className="flex flex-col h-auto py-3">
-                            <FileText className="h-5 w-5 mb-1" />
-                            <span>قوالب نصية</span>
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Text Templates */}
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg">قوالب النصوص</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          {textTemplates.map((template) => (
-                            <Button 
-                              key={template.id}
-                              variant="outline" 
-                              className="w-full justify-start text-right h-auto py-2"
-                              onClick={() => applyTextTemplate(template)}
-                            >
-                              <div>
-                                <div className="font-medium">{template.name}</div>
-                                <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                  {template.content}
-                                </div>
-                              </div>
-                            </Button>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Text Editing Options */}
-                    {activeTextId !== null && (
-                      <Card>
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg">تحرير النص</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div>
-                            <Label htmlFor="textContent">محتوى النص</Label>
-                            <Textarea
-                              id="textContent"
-                              value={textContent}
-                              onChange={handleTextChange}
-                              className="mt-1"
-                              rows={3}
-                            />
-                          </div>
-
-                          <div>
-                            <Label htmlFor="fontSize">حجم الخط</Label>
-                            <div className="flex items-center mt-1">
-                              <Button 
-                                type="button" 
-                                variant="outline" 
-                                size="icon"
-                                onClick={() => {
-                                  const newSize = Math.max(8, fontSize - 2);
-                                  setFontSize(newSize);
-                                  updateActiveTextStyle('size', newSize);
-                                }}
-                              >
-                                <span className="text-lg">-</span>
-                              </Button>
-                              <Input
-                                id="fontSize"
-                                type="number"
-                                min="8"
-                                max="120"
-                                value={fontSize}
-                                className="w-16 text-center mx-2"
-                                onChange={(e) => {
-                                  const newSize = parseInt(e.target.value);
-                                  setFontSize(newSize);
-                                  updateActiveTextStyle('size', newSize);
-                                }}
-                              />
-                              <Button 
-                                type="button" 
-                                variant="outline" 
-                                size="icon"
-                                onClick={() => {
-                                  const newSize = Math.min(120, fontSize + 2);
-                                  setFontSize(newSize);
-                                  updateActiveTextStyle('size', newSize);
-                                }}
-                              >
-                                <span className="text-lg">+</span>
-                              </Button>
-                            </div>
-                          </div>
-
-                          <div>
-                            <Label htmlFor="font">نوع الخط</Label>
-                            <Select 
-                              value={selectedFont}
-                              onValueChange={(val) => {
-                                setSelectedFont(val);
-                                updateActiveTextStyle('font', val);
-                              }}
-                            >
-                              <SelectTrigger id="font" className="mt-1">
-                                <SelectValue placeholder="اختر نوع الخط" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {fontOptions.map((font) => (
-                                  <SelectItem key={font.value} value={font.value}>{font.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div>
-                            <Label>محاذاة النص</Label>
-                            <div className="grid grid-cols-3 gap-2 mt-1">
-                              <Button
-                                type="button"
-                                variant={textAlign === "right" ? "default" : "outline"}
-                                className="w-full"
-                                onClick={() => {
-                                  setTextAlign("right");
-                                  updateActiveTextStyle('align', 'right');
-                                }}
-                              >
-                                يمين
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={textAlign === "center" ? "default" : "outline"}
-                                className="w-full"
-                                onClick={() => {
-                                  setTextAlign("center");
-                                  updateActiveTextStyle('align', 'center');
-                                }}
-                              >
-                                وسط
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={textAlign === "left" ? "default" : "outline"}
-                                className="w-full"
-                                onClick={() => {
-                                  setTextAlign("left");
-                                  updateActiveTextStyle('align', 'left');
-                                }}
-                              >
-                                يسار
-                              </Button>
-                            </div>
-                          </div>
-
-                          <div>
-                            <Label>لون النص</Label>
-                            <div className="grid grid-cols-3 gap-2 mt-1">
-                              {colorOptions.map((color) => (
-                                <button
-                                  key={color.value}
-                                  type="button"
-                                  className={`w-full h-8 rounded border ${textColor === color.value ? 'ring-2 ring-primary' : ''}`}
-                                  style={{ backgroundColor: color.value }}
-                                  onClick={() => {
-                                    setTextColor(color.value);
-                                    updateActiveTextStyle('color', color.value);
+                      )}
+                      
+                      <div className="relative h-full">
+                        <img 
+                          src={selectedVariant.url} 
+                          alt={selectedVariant.name}
+                          className="w-full h-full object-cover"
+                        />
+                        
+                        {/* Text Elements */}
+                        {textElements.map((text) => (
+                          <div 
+                            key={text.id}
+                            className={`absolute cursor-move ${activeTextId === text.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                            style={{
+                              left: `${text.x}px`,
+                              top: `${text.y}px`,
+                              fontFamily: text.font,
+                              fontSize: `${text.size}px`,
+                              color: text.color,
+                              textAlign: text.align,
+                              direction: text.direction,
+                              fontWeight: text.bold ? 'bold' : 'normal',
+                              fontStyle: text.italic ? 'italic' : 'normal',
+                              textDecoration: text.underline ? 'underline' : 'none',
+                              textShadow: text.shadow ? `1px 1px 2px ${text.shadowColor}` : 'none',
+                              backgroundColor: text.backgroundColor !== 'transparent' ? text.backgroundColor : 'transparent',
+                              WebkitTextStroke: text.stroke ? `1px ${text.strokeColor}` : 'none',
+                              padding: '4px',
+                              width: text.width ? `${text.width}px` : 'auto',
+                              minWidth: '30px',
+                              minHeight: '20px',
+                              zIndex: 20
+                            }}
+                            onMouseDown={(e) => handleTextMouseDown(e, text.id)}
+                          >
+                            {text.content || "نص جديد"}
+                            
+                            {/* Resize handle - only shown when element is active */}
+                            {activeTextId === text.id && (
+                              <div className="absolute bottom-0 left-0 w-8 h-8 bg-primary opacity-50 cursor-nwse-resize"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const startWidth = text.width || 200;
+                                    const startHeight = text.height || 50;
+                                    const startX = e.clientX;
+                                    const startY = e.clientY;
+                                    
+                                    const handleMouseMove = (moveEvent: MouseEvent) => {
+                                      const dx = moveEvent.clientX - startX;
+                                      const dy = moveEvent.clientY - startY;
+                                      const newWidth = startWidth + dx;
+                                      const newHeight = startHeight + dy;
+                                      
+                                      resizeTextElement(
+                                        Math.max(30, newWidth), 
+                                        Math.max(20, newHeight)
+                                      );
+                                    };
+                                    
+                                    const handleMouseUp = () => {
+                                      document.removeEventListener('mousemove', handleMouseMove);
+                                      document.removeEventListener('mouseup', handleMouseUp);
+                                    };
+                                    
+                                    document.addEventListener('mousemove', handleMouseMove);
+                                    document.addEventListener('mouseup', handleMouseUp);
                                   }}
-                                  title={color.label}
-                                />
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <Label>تأثيرات النص</Label>
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              <Button
-                                type="button"
-                                variant={textBold ? "default" : "outline"}
-                                className="w-auto px-3"
-                                onClick={() => {
-                                  const newValue = !textBold;
-                                  setTextBold(newValue);
-                                  updateActiveTextStyle('bold', newValue);
-                                }}
-                              >
-                                عريض
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={textItalic ? "default" : "outline"}
-                                className="w-auto px-3"
-                                onClick={() => {
-                                  const newValue = !textItalic;
-                                  setTextItalic(newValue);
-                                  updateActiveTextStyle('italic', newValue);
-                                }}
-                              >
-                                مائل
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={textUnderline ? "default" : "outline"}
-                                className="w-auto px-3"
-                                onClick={() => {
-                                  const newValue = !textUnderline;
-                                  setTextUnderline(newValue);
-                                  updateActiveTextStyle('underline', newValue);
-                                }}
-                              >
-                                تسطير
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={textShadow ? "default" : "outline"}
-                                className="w-auto px-3"
-                                onClick={() => {
-                                  const newValue = !textShadow;
-                                  setTextShadow(newValue);
-                                  updateActiveTextStyle('shadow', newValue);
-                                }}
-                              >
-                                ظل
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-
-                  {/* Middle - Design Canvas */}
-                  <div className="lg:col-span-2">
-                    <Card className="overflow-hidden">
-                      <CardHeader className="border-b flex-row justify-between items-center py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="icon" onClick={handleZoomOut} disabled={zoomLevel <= 50}>
-                            <ZoomOut className="h-4 w-4" />
-                          </Button>
-                          <span>{zoomLevel}%</span>
-                          <Button variant="ghost" size="icon" onClick={handleZoomIn} disabled={zoomLevel >= 200}>
-                            <ZoomIn className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" className="h-8" onClick={handleExportDesign}>
-                            <Download className="h-4 w-4 ml-1" />
-                            تصدير
-                          </Button>
-                          <Button variant="outline" size="sm" className="h-8" onClick={handleShareDesign}>
-                            <Share2 className="h-4 w-4 ml-1" />
-                            مشاركة
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="flex items-center justify-center p-0 min-h-[500px] bg-muted/30 overflow-auto">
-                        <div 
-                          className="relative"
-                          style={{
-                            transform: `scale(${zoomLevel / 100})`,
-                            transition: 'transform 0.2s',
-                            aspectRatio: selectedVariant.ratio === "1:1" ? "1/1" : 
-                                        selectedVariant.ratio === "4:5" ? "4/5" : "9/16",
-                            width: selectedVariant.ratio === "1:1" ? '500px' : 
-                                  selectedVariant.ratio === "4:5" ? '400px' : '280px',
-                            maxWidth: '100%'
-                          }}
-                        >
-                          <div className="absolute inset-0 pointer-events-none">
-                            {showGrid && (
-                              <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                                <defs>
-                                  <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-                                  </pattern>
-                                </defs>
-                                <rect width="100%" height="100%" fill="url(#grid)" />
-                              </svg>
+                              ></div>
                             )}
                           </div>
-                          
-                          <div className="relative h-full">
-                            <img 
-                              src={selectedVariant.url} 
-                              alt={selectedVariant.name}
-                              className="w-full h-full object-cover"
-                            />
-                            
-                            {/* Text Elements */}
-                            {textElements.map((text) => (
-                              <div 
-                                key={text.id}
-                                className={`absolute cursor-move p-2 ${activeTextId === text.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
-                                style={{
-                                  left: `${text.x}px`,
-                                  top: `${text.y}px`,
-                                  fontFamily: text.font,
-                                  fontSize: `${text.size}px`,
-                                  color: text.color,
-                                  textAlign: text.align,
-                                  direction: text.direction,
-                                  fontWeight: text.bold ? 'bold' : 'normal',
-                                  fontStyle: text.italic ? 'italic' : 'normal',
-                                  textDecoration: text.underline ? 'underline' : 'none',
-                                  textShadow: text.shadow ? `1px 1px 2px ${text.shadowColor}` : 'none',
-                                  backgroundColor: text.backgroundColor !== 'transparent' ? text.backgroundColor : 'transparent',
-                                  WebkitTextStroke: text.stroke ? `1px ${text.strokeColor}` : 'none',
-                                  padding: '4px',
-                                  maxWidth: '80%'
-                                }}
-                                onClick={() => {
-                                  setActiveTextId(text.id);
-                                  setTextContent(text.content);
-                                  setSelectedFont(text.font);
-                                  setFontSize(text.size);
-                                  setTextAlign(text.align);
-                                  setTextColor(text.color);
-                                  setTextDirection(text.direction);
-                                  setTextBold(text.bold);
-                                  setTextItalic(text.italic);
-                                  setTextUnderline(text.underline);
-                                  setTextShadow(text.shadow);
-                                  setTextShadowColor(text.shadowColor);
-                                  setTextStroke(text.stroke);
-                                  setTextStrokeColor(text.strokeColor);
-                                  setTextBackgroundColor(text.backgroundColor);
-                                }}
-                              >
-                                {text.content || "نص جديد"}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </>
-            )}
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="export" className="space-y-6">
@@ -804,43 +867,29 @@ const NewsDesignPage = () => {
                   </div>
                   
                   <div className="flex flex-col justify-center items-center bg-muted/20 rounded-lg border border-dashed p-6">
-                    {selectedVariantId && selectedVariant ? (
-                      <div className="text-center">
-                        <div className="mb-4">
-                          <img 
-                            src={selectedVariant.url} 
-                            alt="معاينة التصدير" 
-                            className="max-h-[200px] max-w-full object-contain mx-auto" 
-                          />
-                        </div>
-                        <div className="text-sm text-muted-foreground mb-2">
-                          الأبعاد: {selectedVariant.ratio}
-                        </div>
-                        <Button onClick={handleExportDesign}>
-                          <Download className="ml-2 h-4 w-4" />
-                          تصدير التصميم
-                        </Button>
+                    <div className="text-center">
+                      <div className="mb-4">
+                        <img 
+                          src={selectedVariant.url} 
+                          alt="معاينة التصدير" 
+                          className="max-h-[200px] max-w-full object-contain mx-auto" 
+                        />
                       </div>
-                    ) : (
-                      <div className="text-center text-muted-foreground">
-                        <SquareDashed className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                        <p>قم بإنشاء تصميم أولاً ليتم معاينته هنا</p>
-                        <Button 
-                          variant="link" 
-                          className="mt-2"
-                          onClick={() => setActiveTab("design")}
-                        >
-                          العودة إلى صفحة التصميم
-                        </Button>
+                      <div className="text-sm text-muted-foreground mb-2">
+                        الأبعاد: {selectedVariant.ratio}
                       </div>
-                    )}
+                      <Button onClick={handleExportDesign}>
+                        <Download className="ml-2 h-4 w-4" />
+                        تصدير التصميم
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 
                 <Separator />
                 
                 <div className="flex justify-end">
-                  <Button onClick={handleExportDesign} disabled={!selectedVariantId}>
+                  <Button onClick={handleExportDesign}>
                     <Download className="ml-2 h-4 w-4" />
                     تصدير التصميم
                   </Button>

@@ -79,7 +79,13 @@ const fontOptions = [
   { value: "Frutiger Arabic", label: "فروتيجر عربي" },
   { value: "Neo Sans Arabic", label: "نيو سانس عربي" },
   { value: "Kufigraph", label: "كوفي جراف" },
-  { value: "Bukra", label: "بكرا" }
+  { value: "Bukra", label: "بكرا" },
+  // إضافة 5 خطوط عربية جديدة
+  { value: "Reem Kufi", label: "ريم كوفي" },
+  { value: "Aref Ruqaa", label: "عارف رقعة" },
+  { value: "Lateef", label: "لطيف" },
+  { value: "Scheherazade New", label: "شهرزاد الجديد" },
+  { value: "Amiri", label: "أميري" }
 ];
 
 // افتراض أننا سنجلب هذه البيانات من ملفات التكوين عن طريق API في المستقبل
@@ -188,7 +194,7 @@ const NewsDesignPage = () => {
     const newId = textCounter + 1;
     const newText = {
       id: newId,
-      content: "نص جديد",
+      content: "نص جديد\nسطر جديد", // جعل النص الافتراضي سطرين
       x: centerX,
       y: centerY,
       font: selectedFont,
@@ -205,13 +211,13 @@ const NewsDesignPage = () => {
       strokeColor: textStrokeColor,
       backgroundColor: textBackgroundColor,
       width: 200, // عرض كافٍ لسطرين
-      height: 50  // ارتفاع كافٍ لسطرين
+      height: 60  // زيادة الارتفاع ليناسب سطرين
     };
     
     setTextElements([...textElements, newText]);
     setActiveTextId(newId);
     setTextCounter(newId);
-    setTextContent("نص جديد");
+    setTextContent("نص جديد\nسطر جديد");
 
     toast({
       title: "تم إضافة نص جديد",
@@ -344,8 +350,16 @@ const NewsDesignPage = () => {
       if (!canvasElement) return;
       
       const displayedRect = canvasElement.getBoundingClientRect();
-      const scaleX = img.naturalWidth / displayedRect.width;
-      const scaleY = img.naturalHeight / displayedRect.height;
+      
+      // تحسين: الحصول على صحة محتوى الصورة في النافذة
+      const imgElement = canvasElement.querySelector('img');
+      const imgRect = imgElement?.getBoundingClientRect();
+      
+      if (!imgRect) return;
+      
+      // استخدام أبعاد الصورة المعروضة بدلاً من أبعاد الكانفاس للحصول على تحويل أكثر دقة
+      const adjustedScaleX = img.naturalWidth / imgRect.width;
+      const adjustedScaleY = img.naturalHeight / imgRect.height;
       
       // رسم جميع عناصر النص
       textElements.forEach(text => {
@@ -355,22 +369,31 @@ const NewsDesignPage = () => {
         let fontStyle = '';
         if (text.bold) fontStyle += 'bold ';
         if (text.italic) fontStyle += 'italic ';
-        fontStyle += `${text.size * scaleY}px ${text.font}`;
+        fontStyle += `${text.size * adjustedScaleY}px ${text.font}`;
         ctx.font = fontStyle;
         ctx.fillStyle = text.color;
         ctx.textAlign = text.align as CanvasTextAlign;
         ctx.direction = text.direction === 'rtl' ? 'rtl' : 'ltr';
         
+        // تصحيح موضع النص باستخدام أبعاد الصورة الحقيقية بدلاً من الكانفاس
+        // حساب الإزاحة الدقيقة من حافة الصورة
+        const imgLeft = imgRect.left - displayedRect.left;
+        const imgTop = imgRect.top - displayedRect.top;
+        
+        // حساب المواقع النسبية للنص داخل صورة العرض
+        const relativeX = text.x - imgLeft;
+        const relativeY = text.y - imgTop;
+        
         if (text.shadow) {
           ctx.shadowColor = text.shadowColor;
-          ctx.shadowBlur = 4 * scaleY;
-          ctx.shadowOffsetX = 2 * scaleX;
-          ctx.shadowOffsetY = 2 * scaleY;
+          ctx.shadowBlur = 4 * adjustedScaleY;
+          ctx.shadowOffsetX = 2 * adjustedScaleX;
+          ctx.shadowOffsetY = 2 * adjustedScaleY;
         }
         
         if (text.stroke) {
           ctx.strokeStyle = text.strokeColor;
-          ctx.lineWidth = 2 * scaleY;
+          ctx.lineWidth = 2 * adjustedScaleY;
         }
         
         // رسم النص مع مراعاة الرجوع للسطر التالي
@@ -378,13 +401,15 @@ const NewsDesignPage = () => {
         const lineHeight = text.size * 1.2; // ارتفاع السطر (1.2 من حجم النص)
         
         lines.forEach((line: string, index: number) => {
-          const yPosition = text.y * scaleY + (index * lineHeight * scaleY);
+          // استخدام الإحداثيات النسبية المصححة
+          const yPosition = (relativeY + (index * lineHeight)) * adjustedScaleY;
+          const xPosition = relativeX * adjustedScaleX;
           
           if (text.stroke) {
-            ctx.strokeText(line, text.x * scaleX, yPosition);
+            ctx.strokeText(line, xPosition, yPosition);
           }
           
-          ctx.fillText(line, text.x * scaleX, yPosition);
+          ctx.fillText(line, xPosition, yPosition);
         });
         
         ctx.restore();

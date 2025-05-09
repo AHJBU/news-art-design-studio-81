@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -329,27 +328,20 @@ const CustomDesignPage = () => {
       // رسم صورة الخلفية
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       
-      // حساب النسبة بين أبعاد الصورة الأصلية والمعروضة
+      // الحصول على عناصر التحكم الضرورية من DOM
       const canvasElement = canvasRef.current;
       if (!canvasElement) return;
       
-      const displayedRect = canvasElement.getBoundingClientRect();
-      const displayedWidth = displayedRect.width;
-      const displayedHeight = displayedRect.height;
-      
-      // حساب نسبة التكبير بين الصورة الأصلية والمعروضة
-      const scaleX = img.naturalWidth / displayedWidth;
-      const scaleY = img.naturalHeight / displayedHeight;
-      
-      // تحسين: الحصول على صحة محتوى الصورة في النافذة
       const imgElement = canvasElement.querySelector('img');
-      const imgRect = imgElement?.getBoundingClientRect();
+      if (!imgElement) return;
       
-      if (!imgRect) return;
+      // الحصول على أبعاد الصورة المعروضة في واجهة المستخدم
+      const displayedRect = imgElement.getBoundingClientRect();
+      const canvasRect = canvasElement.getBoundingClientRect();
       
-      // استخدام أبعاد الصورة المعروضة بدلاً من أبعاد الكانفاس للحصول على تحويل أكثر دقة
-      const adjustedScaleX = img.naturalWidth / imgRect.width;
-      const adjustedScaleY = img.naturalHeight / imgRect.height;
+      // حساب نسب التحويل من أحجام العرض إلى الحجم الأصلي للصورة
+      const scaleX = img.naturalWidth / displayedRect.width;
+      const scaleY = img.naturalHeight / displayedRect.height;
       
       // رسم جميع عناصر النص
       textElements.forEach(text => {
@@ -359,38 +351,55 @@ const CustomDesignPage = () => {
         let fontStyle = '';
         if (text.bold) fontStyle += 'bold ';
         if (text.italic) fontStyle += 'italic ';
-        fontStyle += `${text.size * adjustedScaleY}px ${text.font}`;
+        fontStyle += `${text.size * scaleY}px ${text.font}`;
         ctx.font = fontStyle;
         ctx.fillStyle = text.color;
         ctx.textAlign = text.align as CanvasTextAlign;
         ctx.direction = text.direction === 'rtl' ? 'rtl' : 'ltr';
         
-        // تصحيح موضع النص باستخدام أبعاد الصورة الحقيقية بدلاً من الكانفاس
-        // حساب الإزاحة الدقيقة من حافة الصورة
-        const imgLeft = imgRect.left - displayedRect.left;
-        const imgTop = imgRect.top - displayedRect.top;
+        // حساب المواضع النسبية للنص داخل الصورة
+        // تحديد الموضع على الصورة المعروضة أولاً
+        const textElement = canvasElement.querySelector(`div[key="${text.id}"]`) as HTMLElement;
+        let relativeX, relativeY;
         
-        // حساب المواقع النسبية للنص داخل صورة العرض
-        const relativeX = text.x - imgLeft;
-        const relativeY = text.y - imgTop;
+        if (textElement) {
+          // استخدام الموضع الدقيق من العنصر إذا أمكن العثور عليه
+          const textRect = textElement.getBoundingClientRect();
+          // حساب الإزاحة من حافة الصورة
+          relativeX = (textRect.left - displayedRect.left) + (textRect.width / 2);
+          relativeY = (textRect.top - displayedRect.top) + (textRect.height / 2);
+        } else {
+          // استخدام موضع ��لنص المخزن كنسخة احتياطية
+          // حساب الإزاحة من حافة الكانفاس إلى الصورة
+          const offsetX = displayedRect.left - canvasRect.left;
+          const offsetY = displayedRect.top - canvasRect.top;
+          
+          // حساب الموضع النسبي من حافة الصورة
+          relativeX = text.x - offsetX;
+          relativeY = text.y - offsetY;
+        }
+        
+        // تحويل الموضع النسبي إلى موضع في الصورة الأصلية
+        const absoluteX = relativeX * scaleX;
+        const absoluteY = relativeY * scaleY;
         
         if (text.shadow) {
           ctx.shadowColor = text.shadowColor;
-          ctx.shadowBlur = 4 * adjustedScaleY;
-          ctx.shadowOffsetX = 2 * adjustedScaleX;
-          ctx.shadowOffsetY = 2 * adjustedScaleY;
+          ctx.shadowBlur = 4 * scaleY;
+          ctx.shadowOffsetX = 2 * scaleX;
+          ctx.shadowOffsetY = 2 * scaleY;
         }
         
         if (text.stroke) {
           ctx.strokeStyle = text.strokeColor;
-          ctx.lineWidth = 2 * adjustedScaleY;
+          ctx.lineWidth = 2 * scaleY;
         }
         
         // رسم خلفية مربع النص إذا كان مطلوباً
         if (includeTextBg && text.backgroundColor !== 'transparent') {
-          const padding = 5 * adjustedScaleY;
+          const padding = 5 * scaleY;
           const lines = text.content.split('\n');
-          const lineHeight = text.size * 1.2;
+          const lineHeight = text.size * 1.2 * scaleY;
           const textHeight = lines.length * lineHeight;
           
           ctx.fillStyle = text.backgroundColor;
@@ -401,13 +410,13 @@ const CustomDesignPage = () => {
             textWidth = Math.max(textWidth, lineWidth);
           }
           
-          let rectX = relativeX * adjustedScaleX;
+          let rectX = absoluteX;
           if (text.align === 'center') rectX -= textWidth / 2;
           else if (text.align === 'right') rectX -= textWidth;
           
           ctx.fillRect(
             rectX - padding, 
-            (relativeY - lineHeight + (lineHeight - text.size)) * adjustedScaleY, 
+            absoluteY - (text.size * scaleY) - padding,
             textWidth + padding * 2, 
             textHeight + padding * 2
           );
@@ -416,18 +425,15 @@ const CustomDesignPage = () => {
         // رسم النص مع مراعاة الرجوع للسطر التالي
         ctx.fillStyle = text.color;
         const lines = text.content.split('\n');
-        const lineHeight = text.size * 1.2; // ارتفاع السطر (1.2 من حجم النص)
+        const lineHeight = text.size * 1.2 * scaleY; // ارتفاع السطر (1.2 من حجم النص)
         
         lines.forEach((line: string, index: number) => {
-          // استخدام الإحداثيات النسبية المصححة
-          const yPosition = (relativeY + (index * lineHeight)) * adjustedScaleY;
-          const xPosition = relativeX * adjustedScaleX;
-          
+          // تصحيح موضع النص عند الرسم
           if (text.stroke) {
-            ctx.strokeText(line, xPosition, yPosition);
+            ctx.strokeText(line, absoluteX, absoluteY + (index * lineHeight));
           }
           
-          ctx.fillText(line, xPosition, yPosition);
+          ctx.fillText(line, absoluteX, absoluteY + (index * lineHeight));
         });
         
         ctx.restore();

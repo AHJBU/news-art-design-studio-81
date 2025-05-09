@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -19,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { type CensorshipWord } from "../../pages/TextCensorshipPage";
 
 // نوع لعنصر الاستبدال
 type ReplacementItem = {
@@ -28,7 +28,7 @@ type ReplacementItem = {
 };
 
 // استرجاع البيانات من التخزين المحلي
-const getStoredReplacements = (): ReplacementItem[] => {
+const getStoredReplacements = (): CensorshipWord[] => {
   if (typeof window !== "undefined") {
     const stored = localStorage.getItem("textCensorshipReplacements");
     if (stored) {
@@ -43,6 +43,12 @@ const getStoredReplacements = (): ReplacementItem[] => {
     { id: "1", original: "فلسطين", replacement: "فلسـطين" },
     { id: "2", original: "حماس", replacement: "حمـ.ـاس" },
     { id: "3", original: "الاحتلال", replacement: "الآحـتلال" },
+    // إضافة بعض الكلمات الجديدة كافتراضي
+    { id: "4", original: "غزة", replacement: "غـ،ـزة" },
+    { id: "5", original: "القدس", replacement: "القـ.ـدس" },
+    { id: "6", original: "المقاومة", replacement: "المقـ.ـاومة" },
+    { id: "7", original: "شهيد", replacement: "شـ،ـهيد" },
+    { id: "8", original: "جهاد", replacement: "جـ.ـهاد" }
   ];
 };
 

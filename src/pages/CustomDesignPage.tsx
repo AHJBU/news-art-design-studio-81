@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -903,4 +904,66 @@ const CustomDesignPage = () => {
                           />
                           <label htmlFor="keep-ratio">الحفاظ على الأبعاد الأصلية</label>
                         </div>
-                        <div className="flex items
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                          <input 
+                            type="checkbox" 
+                            id="transparent-bg" 
+                            className="rounded text-primary"
+                            checked={transparentBg}
+                            onChange={(e) => setTransparentBg(e.target.checked)}
+                          />
+                          <label htmlFor="transparent-bg">خلفية شفافة (PNG فقط)</label>
+                        </div>
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                          <input 
+                            type="checkbox" 
+                            id="include-text-bg" 
+                            className="rounded text-primary"
+                            checked={includeTextBg}
+                            onChange={(e) => setIncludeTextBg(e.target.checked)}
+                          />
+                          <label htmlFor="include-text-bg">تضمين خلفية النص</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium mb-2">معاينة الإعدادات</h3>
+                      <div className="p-4 border rounded bg-muted/20">
+                        <p className="text-sm">سيتم تصدير التصميم بالإعدادات التالية:</p>
+                        <ul className="mt-2 text-sm space-y-1">
+                          <li>الاسم: {fileName}.{fileFormat}</li>
+                          <li>التنسيق: {fileFormat === 'png' ? 'PNG' : 'JPEG'}</li>
+                          <li>الحفاظ على النسبة: {keepRatio ? 'نعم' : 'لا'}</li>
+                          {fileFormat === 'png' && (
+                            <li>خلفية شفافة: {transparentBg ? 'نعم' : 'لا'}</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4">
+                      <Button 
+                        className="w-full" 
+                        onClick={handleExportDesign}
+                        disabled={!backgroundImage}
+                      >
+                        <Download className="ml-2 h-4 w-4" />
+                        تصدير التصميم
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+export default CustomDesignPage;

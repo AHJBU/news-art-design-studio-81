@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -21,35 +21,78 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+
+// نوع بيانات إعدادات التصدير
+interface ExportSettingsData {
+  defaultFormat: string;
+  pngQuality: number;
+  jpegQuality: number;
+  preserveTransparency: boolean;
+  defaultFilenameTemplate: string;
+  includeMetadata: boolean;
+  highResolutionExport: boolean;
+  maxWidthOutput: number;
+  exportTextBackgrounds: boolean;
+}
+
+// الإعدادات الافتراضية
+const defaultSettings: ExportSettingsData = {
+  defaultFormat: "png",
+  pngQuality: 90,
+  jpegQuality: 85,
+  preserveTransparency: true,
+  defaultFilenameTemplate: "xdesign_{date}",
+  includeMetadata: false,
+  highResolutionExport: true,
+  maxWidthOutput: 2000,
+  exportTextBackgrounds: false,
+};
 
 export const ExportSettings = () => {
-  // بيانات وهمية للعرض والتجربة
-  const [exportSettings, setExportSettings] = useState({
-    defaultFormat: "png",
-    pngQuality: 90,
-    jpegQuality: 85,
-    preserveTransparency: true,
-    defaultFilenameTemplate: "xdesign_{date}",
-    includeMetadata: false,
-    highResolutionExport: true,
-    maxWidthOutput: 2000,
-    exportTextBackgrounds: false,
-  });
+  const { toast } = useToast();
+  const [exportSettings, setExportSettings] = useState<ExportSettingsData>(defaultSettings);
 
+  // استرجاع الإعدادات المخزنة عند تحميل المكون
+  useEffect(() => {
+    const storedSettings = localStorage.getItem("exportSettings");
+    if (storedSettings) {
+      try {
+        setExportSettings(JSON.parse(storedSettings));
+      } catch (e) {
+        console.error("Error parsing stored export settings:", e);
+      }
+    }
+  }, []);
+
+  // تحديث الإعدادات
   const handleSettingChange = (
-    setting: string,
+    setting: keyof ExportSettingsData,
     value: string | number | boolean
   ) => {
-    setExportSettings({
-      ...exportSettings,
+    setExportSettings(prev => ({
+      ...prev,
       [setting]: value,
+    }));
+  };
+
+  // حفظ الإعدادات
+  const saveChanges = () => {
+    localStorage.setItem("exportSettings", JSON.stringify(exportSettings));
+    toast({
+      title: "تم الحفظ بنجاح",
+      description: "تم حفظ إعدادات التصدير بنجاح",
     });
   };
 
-  const saveChanges = () => {
-    // هنا سيتم إرسال البيانات إلى واجهة برمجة التطبيقات (API)
-    console.log("Saving export settings...");
-    // تم الحفظ بنجاح - إضافة رسالة نجاح هنا
+  // إعادة تعيين الإعدادات
+  const resetSettings = () => {
+    setExportSettings(defaultSettings);
+    localStorage.removeItem("exportSettings");
+    toast({
+      title: "تم إعادة التعيين",
+      description: "تم إعادة إعدادات التصدير للقيم الافتراضية",
+    });
   };
 
   return (
@@ -249,7 +292,7 @@ export const ExportSettings = () => {
       </Card>
 
       <div className="flex justify-end gap-2">
-        <Button variant="outline">إعادة التعيين</Button>
+        <Button variant="outline" onClick={resetSettings}>إعادة التعيين</Button>
         <Button onClick={saveChanges}>حفظ التغييرات</Button>
       </div>
     </div>

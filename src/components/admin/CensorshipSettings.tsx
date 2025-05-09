@@ -1,230 +1,263 @@
 
 import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PlusCircle, Trash2 } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Trash } from "lucide-react";
 
-// Type definitions for censorship data
-export interface CensorshipWord {
-  id: number;
+// نوع لعنصر الاستبدال
+type ReplacementItem = {
+  id: string;
   original: string;
   replacement: string;
-}
+};
+
+// استرجاع البيانات من التخزين المحلي
+const getStoredReplacements = (): ReplacementItem[] => {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("textCensorshipReplacements");
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error("Error parsing stored replacements:", e);
+      }
+    }
+  }
+  return [
+    { id: "1", original: "فلسطين", replacement: "فلسـطين" },
+    { id: "2", original: "حماس", replacement: "حمـ.ـاس" },
+    { id: "3", original: "الاحتلال", replacement: "الآحـتلال" },
+  ];
+};
 
 const CensorshipSettings = () => {
   const { toast } = useToast();
-  const [words, setWords] = useState<CensorshipWord[]>([]);
+  const [replacements, setReplacements] = useState<ReplacementItem[]>([]);
   const [newOriginal, setNewOriginal] = useState("");
   const [newReplacement, setNewReplacement] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Load initial censorship words from API/storage
+
+  // استرجاع البيانات عند تحميل المكون
   useEffect(() => {
-    // In a real implementation, this would fetch from your API
-    const initialWords: CensorshipWord[] = [
-      { id: 1, original: "فلسطين", replacement: "فلسـطين" },
-      { id: 2, original: "حماس", replacement: "حمـ.ـاس" },
-      { id: 3, original: "الاحتلال", replacement: "الآحـتلال" }
-    ];
-    
-    // استدعاء API لجلب قائمة الكلمات من ملف الإعدادات
-    fetch('/api/censorship/words')
-      .then(response => {
-        if (response.ok) return response.json();
-        return initialWords; // استخدام القائمة الافتراضية كاحتياطي
-      })
-      .then(data => {
-        setWords(Array.isArray(data) && data.length > 0 ? data : initialWords);
-      })
-      .catch(error => {
-        console.error("Error fetching censorship words:", error);
-        setWords(initialWords);
-      });
+    setReplacements(getStoredReplacements());
   }, []);
 
-  const addWord = () => {
+  // حفظ البيانات في التخزين المحلي عندما تتغير
+  const saveReplacements = (items: ReplacementItem[]) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("textCensorshipReplacements", JSON.stringify(items));
+    }
+  };
+
+  // إضافة عنصر استبدال جديد
+  const handleAddReplacement = () => {
     if (!newOriginal || !newReplacement) {
       toast({
-        title: "خطأ في الإدخال",
-        description: "الرجاء إدخال الكلمة الأصلية والبديل",
-        variant: "destructive"
+        title: "خطأ",
+        description: "الرجاء إدخال النص الأصلي والبديل",
+        variant: "destructive",
       });
       return;
     }
-    
-    const newId = words.length > 0 ? Math.max(...words.map(w => w.id)) + 1 : 1;
-    const newWord = {
-      id: newId,
+
+    const newItem: ReplacementItem = {
+      id: Date.now().toString(),
       original: newOriginal,
-      replacement: newReplacement
+      replacement: newReplacement,
     };
+
+    const updatedReplacements = [...replacements, newItem];
+    setReplacements(updatedReplacements);
+    saveReplacements(updatedReplacements);
     
-    const updatedWords = [...words, newWord];
-    setWords(updatedWords);
     setNewOriginal("");
     setNewReplacement("");
-    
-    // In a real implementation, this would be saved to the API immediately
-    saveToAPI(updatedWords);
+
+    toast({
+      title: "تم الإضافة بنجاح",
+      description: "تمت إضافة عنصر الاستبدال الجديد",
+    });
   };
 
-  const removeWord = (id: number) => {
-    const updatedWords = words.filter(word => word.id !== id);
-    setWords(updatedWords);
-    
-    // In a real implementation, this would be saved to the API immediately
-    saveToAPI(updatedWords);
+  // حذف عنصر استبدال
+  const handleDeleteReplacement = (id: string) => {
+    const updatedReplacements = replacements.filter((item) => item.id !== id);
+    setReplacements(updatedReplacements);
+    saveReplacements(updatedReplacements);
+
+    toast({
+      title: "تم الحذف",
+      description: "تم حذف عنصر الاستبدال بنجاح",
+    });
   };
 
-  const saveToAPI = async (wordList: CensorshipWord[]) => {
-    setIsSaving(true);
-    
-    try {
-      // إرسال القائمة المحدثة إلى API لحفظها في ملف الإعدادات
-      const response = await fetch('/api/censorship/words', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(wordList),
-      });
-      
-      if (!response.ok) {
-        throw new Error('فشل حفظ البيانات');
-      }
-      
-      // للمحاكاة، سنضيف تأخيراً صغيراً
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      toast({
-        title: "تم الحفظ بنجاح",
-        description: "تم حفظ إعدادات الرقابة"
-      });
-      
-      // تحديث localStorage للاستخدام المستقبلي
-      localStorage.setItem('censorshipWords', JSON.stringify(wordList));
-    } catch (error) {
-      toast({
-        title: "خطأ في الحفظ",
-        description: "لم يتم حفظ التغييرات، الرجاء المحاولة مرة أخرى",
-        variant: "destructive"
-      });
-      console.error("Error saving censorship settings:", error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSave = () => {
-    saveToAPI(words);
+  // تعديل عنصر استبدال
+  const handleUpdateReplacement = (id: string, field: "original" | "replacement", value: string) => {
+    const updatedReplacements = replacements.map((item) =>
+      item.id === id ? { ...item, [field]: value } : item
+    );
+    setReplacements(updatedReplacements);
+    saveReplacements(updatedReplacements);
   };
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>إدارة رقابة النصوص</CardTitle>
+          <CardTitle>قائمة كلمات الاستبدال</CardTitle>
           <CardDescription>
-            أضف وإدارة الكلمات التي سيتم استبدالها عند تطبيق الرقابة على النصوص
+            إدارة قائمة الكلمات التي سيتم استبدالها تلقائياً في نصوص التصميم
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>الكلمة الأصلية</TableHead>
-                <TableHead>البديل</TableHead>
-                <TableHead className="w-[100px]">إجراءات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {words.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
-                    لا توجد كلمات للرقابة. أضف كلمات جديدة أدناه.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                words.map((word) => (
-                  <TableRow key={word.id}>
-                    <TableCell>{word.original}</TableCell>
-                    <TableCell>{word.replacement}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeWord(word.id)}
-                      >
-                        <Trash className="h-4 w-4" />
-                        <span className="sr-only">حذف</span>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-
-          <div className="mt-6 space-y-4">
-            <h3 className="text-lg font-medium">إضافة كلمة جديدة</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="original">الكلمة الأصلية</Label>
+          <div className="space-y-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
                 <Input
-                  id="original"
-                  placeholder="أدخل الكلمة الأصلية"
+                  placeholder="النص الأصلي"
                   value={newOriginal}
                   onChange={(e) => setNewOriginal(e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="replacement">البديل</Label>
+              <div className="flex-1">
                 <Input
-                  id="replacement"
-                  placeholder="أدخل البديل"
+                  placeholder="النص البديل"
                   value={newReplacement}
                   onChange={(e) => setNewReplacement(e.target.value)}
                 />
               </div>
+              <div>
+                <Button onClick={handleAddReplacement}>
+                  <PlusCircle className="ml-1 h-4 w-4" />
+                  إضافة
+                </Button>
+              </div>
             </div>
-            <Button onClick={addWord}>إضافة كلمة</Button>
+
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>النص الأصلي</TableHead>
+                    <TableHead>النص البديل</TableHead>
+                    <TableHead className="w-[100px]">إجراءات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {replacements.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-4">
+                        لا توجد عناصر للعرض
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    replacements.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <Input
+                            value={item.original}
+                            onChange={(e) =>
+                              handleUpdateReplacement(
+                                item.id,
+                                "original",
+                                e.target.value
+                              )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={item.replacement}
+                            onChange={(e) =>
+                              handleUpdateReplacement(
+                                item.id,
+                                "replacement",
+                                e.target.value
+                              )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/20"
+                            onClick={() => handleDeleteReplacement(item.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </CardContent>
-        <CardFooter className="justify-end border-t p-4">
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-          >
-            {isSaving ? "جاري الحفظ..." : "حفظ التغييرات"}
-          </Button>
-        </CardFooter>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>معاينة رقابة النصوص</CardTitle>
+          <CardTitle>إعدادات أداة الرقابة النصية</CardTitle>
           <CardDescription>
-            هذه معاينة لكيفية عمل الرقابة على نموذج نص
+            ضبط خيارات عمل أداة استبدال النصوص
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="p-4 border rounded-md bg-muted/20">
-            <p className="mb-2 font-medium">النص الأصلي:</p>
-            <p className="text-muted-foreground mb-4">
-              حماس، الحركة التي تدافع عن القضية الفلسطينية، تواجه الاحتلال الإسرائيلي المستمر للأراضي الفلسطينية.
-            </p>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <input
+                type="checkbox"
+                id="autocensor"
+                className="rounded text-primary"
+                defaultChecked={true}
+              />
+              <label htmlFor="autocensor">
+                تطبيق الاستبدال تلقائياً عند إضافة نص جديد
+              </label>
+            </div>
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <input
+                type="checkbox"
+                id="case-sensitive"
+                className="rounded text-primary"
+                defaultChecked={true}
+              />
+              <label htmlFor="case-sensitive">
+                مراعاة حالة الأحرف (كبيرة/صغيرة) عند الاستبدال
+              </label>
+            </div>
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <input
+                type="checkbox"
+                id="partial-match"
+                className="rounded text-primary"
+                defaultChecked={true}
+              />
+              <label htmlFor="partial-match">
+                استبدال الكلمات ضمن النصوص الأكبر
+              </label>
+            </div>
 
-            <p className="mb-2 font-medium">النص بعد تطبيق الرقابة:</p>
-            <p>
-              {words.reduce(
-                (text, word) => text.replace(new RegExp(word.original, "g"), word.replacement),
-                "حماس، الحركة التي تدافع عن القضية الفلسطينية، تواجه الاحتلال الإسرائيلي المستمر للأراضي الفلسطينية."
-              )}
-            </p>
+            <div className="flex justify-end mt-6">
+              <Button>حفظ الإعدادات</Button>
+            </div>
           </div>
         </CardContent>
       </Card>

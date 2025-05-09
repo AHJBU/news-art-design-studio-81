@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -328,8 +327,12 @@ const CustomDesignPage = () => {
       if (!canvasElement) return;
       
       const displayedRect = canvasElement.getBoundingClientRect();
-      const scaleX = img.naturalWidth / displayedRect.width;
-      const scaleY = img.naturalHeight / displayedRect.height;
+      const displayedWidth = displayedRect.width;
+      const displayedHeight = displayedRect.height;
+      
+      // حساب نسبة التكبير بين الصورة الأصلية والمعروضة
+      const scaleX = img.naturalWidth / displayedWidth;
+      const scaleY = img.naturalHeight / displayedHeight;
       
       // رسم جميع عناصر النص
       textElements.forEach(text => {
@@ -357,12 +360,40 @@ const CustomDesignPage = () => {
           ctx.lineWidth = 2 * scaleY;
         }
         
+        // رسم خلفية مربع النص إذا كان مطلوباً
+        if (includeTextBg && text.backgroundColor !== 'transparent') {
+          const padding = 5 * scaleY;
+          const lines = text.content.split('\n');
+          const lineHeight = text.size * 1.2;
+          const textHeight = lines.length * lineHeight;
+          
+          ctx.fillStyle = text.backgroundColor;
+          
+          let textWidth = 0;
+          for (const line of lines) {
+            const lineWidth = ctx.measureText(line).width;
+            textWidth = Math.max(textWidth, lineWidth);
+          }
+          
+          let rectX = text.x * scaleX;
+          if (text.align === 'center') rectX -= textWidth / 2;
+          else if (text.align === 'right') rectX -= textWidth;
+          
+          ctx.fillRect(
+            rectX - padding, 
+            (text.y - lineHeight + (lineHeight - text.size)) * scaleY, 
+            textWidth + padding * 2, 
+            textHeight + padding * 2
+          );
+        }
+        
         // رسم النص مع مراعاة الرجوع للسطر التالي
+        ctx.fillStyle = text.color;
         const lines = text.content.split('\n');
         const lineHeight = text.size * 1.2; // ارتفاع السطر (1.2 من حجم النص)
         
         lines.forEach((line: string, index: number) => {
-          const yPosition = text.y * scaleY + (index * lineHeight * scaleY);
+          const yPosition = (text.y + (index * lineHeight)) * scaleY;
           
           if (text.stroke) {
             ctx.strokeText(line, text.x * scaleX, yPosition);
@@ -872,76 +903,4 @@ const CustomDesignPage = () => {
                           />
                           <label htmlFor="keep-ratio">الحفاظ على الأبعاد الأصلية</label>
                         </div>
-                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                          <input 
-                            type="checkbox" 
-                            id="transparent-bg" 
-                            className="rounded text-primary"
-                            checked={transparentBg}
-                            onChange={(e) => setTransparentBg(e.target.checked)}
-                          />
-                          <label htmlFor="transparent-bg">خلفية شفافة (PNG فقط)</label>
-                        </div>
-                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                          <input 
-                            type="checkbox" 
-                            id="include-text-bg" 
-                            className="rounded text-primary"
-                            checked={includeTextBg}
-                            onChange={(e) => setIncludeTextBg(e.target.checked)}
-                          />
-                          <label htmlFor="include-text-bg">إظهار خلفيات النصوص</label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col justify-center items-center bg-muted/20 rounded-lg border border-dashed p-6">
-                    <div className="text-center">
-                      {backgroundImage ? (
-                        <div className="mb-4">
-                          <img 
-                            src={backgroundImage} 
-                            alt="معاينة التصدير" 
-                            className="max-h-[200px] max-w-full object-contain mx-auto"
-                            crossOrigin="anonymous"
-                          />
-                        </div>
-                      ) : (
-                        <div className="mb-4 p-4">
-                          <p>لا توجد صورة محملة</p>
-                        </div>
-                      )}
-                      <Button 
-                        onClick={handleExportDesign}
-                        disabled={!backgroundImage}
-                      >
-                        <Download className="ml-2 h-4 w-4" />
-                        تصدير التصميم
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-                
-                <Separator />
-                
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={handleExportDesign}
-                    disabled={!backgroundImage}
-                  >
-                    <Download className="ml-2 h-4 w-4" />
-                    تصدير التصميم
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </main>
-      <Footer />
-    </div>
-  );
-};
-
-export default CustomDesignPage;
+                        <div className="flex items

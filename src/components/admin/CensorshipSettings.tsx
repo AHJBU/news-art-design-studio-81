@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -28,12 +29,18 @@ type ReplacementItem = {
 };
 
 // استرجاع البيانات من التخزين المحلي
-const getStoredReplacements = (): CensorshipWord[] => {
+const getStoredReplacements = (): ReplacementItem[] => {
   if (typeof window !== "undefined") {
     const stored = localStorage.getItem("textCensorshipReplacements");
     if (stored) {
       try {
-        return JSON.parse(stored);
+        // تحويل البيانات إلى النوع المطلوب
+        const parsedData = JSON.parse(stored);
+        // التأكد من أن كل id هو نوع string
+        return parsedData.map((item: any) => ({
+          ...item,
+          id: String(item.id)
+        }));
       } catch (e) {
         console.error("Error parsing stored replacements:", e);
       }
@@ -48,7 +55,84 @@ const getStoredReplacements = (): CensorshipWord[] => {
     { id: "5", original: "القدس", replacement: "القـ.ـدس" },
     { id: "6", original: "المقاومة", replacement: "المقـ.ـاومة" },
     { id: "7", original: "شهيد", replacement: "شـ،ـهيد" },
-    { id: "8", original: "جهاد", replacement: "جـ.ـهاد" }
+    { id: "8", original: "جهاد", replacement: "جـ.ـهاد" },
+    { id: "9", original: "الضفة", replacement: "الضـ،ـفة" },
+    { id: "10", original: "نابلس", replacement: "نـ.ـابلس" },
+    { id: "11", original: "جنين", replacement: "جـ.ـنين" },
+    { id: "12", original: "المسجد الأقصى", replacement: "المسـجد الأقـ،ـصى" },
+    { id: "13", original: "حي الشيخ جراح", replacement: "حـ.ـي الشـ،ـيخ جـ.ـراح" },
+    { id: "14", original: "رفح", replacement: "ر.فـ،ـح" },
+    { id: "15", original: "خانيونس", replacement: "خـ،ـانيـ.ـونس" },
+    { id: "16", original: "المستوطنين", replacement: "المستـ.ـوطنين" },
+    { id: "17", original: "الحصار", replacement: "الحـ،ـصار" },
+    { id: "18", original: "التطهير العرقي", replacement: "التطـ.ـهير العـ،ـرقي" },
+    { id: "19", original: "النكبة", replacement: "النكـ،ـبة" },
+    { id: "20", original: "النكسة", replacement: "النـ.ـكسة" },
+    { id: "21", original: "التطبيع", replacement: "التطـ،ـبيع" },
+    { id: "22", original: "جدار الفصل", replacement: "جـ.ـدار الفـ،ـصل" },
+    { id: "23", original: "تهويد", replacement: "تهـ.ـويد" },
+    { id: "24", original: "ضم", replacement: "ضـ،ـم" },
+    { id: "25", original: "الجهاد الإسلامي", replacement: "الجـ،ـهاد الإسـ.ـلامي" },
+    { id: "26", original: "كتائب القسام", replacement: "كتـ.ـائب القـ،ـسام" },
+    { id: "27", original: "سرايا القدس", replacement: "سـ،ـرايا القـ.ـدس" },
+    { id: "28", original: "كتائب الأقصى", replacement: "كتـ،ـائب الأقـ.ـصى" },
+    { id: "29", original: "ألوية الناصر", replacement: "ألـ.ـوية النـ،ـاصر" },
+    { id: "30", original: "الرد الصاروخي", replacement: "الـ،ـرد الصـ.ـاروخي" },
+    { id: "31", original: "صاروخ", replacement: "صـ،ـاروخ" },
+    { id: "32", original: "طائرة مسيرة", replacement: "طـ.ـائرة مسـ،ـيرة" },
+    { id: "33", original: "قنص", replacement: "قـ،ـنص" },
+    { id: "34", original: "اشتباك", replacement: "اشتـ.ـباك" },
+    { id: "35", original: "عبوة ناسفة", replacement: "عبـ،ـوة نـ.ـاسفة" },
+    { id: "36", original: "نفق", replacement: "نـ،ـفق" },
+    { id: "37", original: "كمين", replacement: "كـ.ـمين" },
+    { id: "38", original: "استهداف", replacement: "استـ،ـهداف" },
+    { id: "39", original: "الرد الفوري", replacement: "الـ.ـرد الفـ،ـوري" },
+    { id: "40", original: "العمليات الفدائية", replacement: "العمليـ.ـات الفدائـ،ـية" },
+    { id: "41", original: "تحرير", replacement: "تـ،ـحرير" },
+    { id: "42", original: "انتفاضة", replacement: "انتفـ.ـاضة" },
+    { id: "43", original: "أسير", replacement: "أسـ،ـير" },
+    { id: "44", original: "أسرى", replacement: "أسـ.ـرى" },
+    { id: "45", original: "محرر", replacement: "مـ،ـحرر" },
+    { id: "46", original: "معتقل", replacement: "معتـ.ـقل" },
+    { id: "47", original: "محتل", replacement: "مـ،ـحتل" },
+    { id: "48", original: "مجرم حرب", replacement: "مجـ.ـرم حـ،ـرب" },
+    { id: "49", original: "مفقود", replacement: "مفـ،ـقود" },
+    { id: "50", original: "مجزرة", replacement: "مجـ.ـزرة" },
+    { id: "51", original: "إبادة", replacement: "إبـ،ـادة" },
+    { id: "52", original: "الله أكبر", replacement: "اللـ.ـه أكـ،ـبر" },
+    { id: "53", original: "النصر", replacement: "النـ،ـصر" },
+    { id: "54", original: "معركة", replacement: "معـ.ـركة" },
+    { id: "55", original: "رباط", replacement: "ربـ،ـاط" },
+    { id: "56", original: "استشهاد", replacement: "استشـ.ـهاد" },
+    { id: "57", original: "شهادة", replacement: "شـ،ـهادة" },
+    { id: "58", original: "فداء", replacement: "فـ.ـداء" },
+    { id: "59", original: "دعاء النصر", replacement: "دعـ،ـاء النـ.ـصر" },
+    { id: "60", original: "وعد الآخرة", replacement: "وعـ.ـد الآخـ،ـرة" },
+    { id: "61", original: "أحمد ياسين", replacement: "أحمـ،ـد يـ.ـاسين" },
+    { id: "62", original: "عبد العزيز الرنتيسي", replacement: "عبـ.ـد العـ،ـزيز الرنتـ.ـيسي" },
+    { id: "63", original: "يحيى السنوار", replacement: "يحـ،ـيى السنـ.ـوار" },
+    { id: "64", original: "محمد الضيف", replacement: "محـ.ـمد الضـ،ـيف" },
+    { id: "65", original: "خليل الوزير", replacement: "خلـ،ـيل الـ.ـوزير" },
+    { id: "66", original: "أبو جهاد", replacement: "أبـ.ـو جـ،ـهاد" },
+    { id: "67", original: "محمود المبحوح", replacement: "محمـ،ـود المبـ.ـحوح" },
+    { id: "68", original: "عياش", replacement: "عيـ.ـاش" },
+    { id: "69", original: "القائد الميداني", replacement: "القـ،ـائد الميـ.ـداني" },
+    { id: "70", original: "أبو عبيدة", replacement: "أبـ.ـو عبـ،ـيدة" },
+    { id: "71", original: "العدوان على غزة", replacement: "العـ،ـدوان علـ.ـى غـ،ـزة" },
+    { id: "72", original: "صمت دولي", replacement: "صـ.ـمت دولـ،ـي" },
+    { id: "73", original: "التواطؤ", replacement: "التـ،ـواطؤ" },
+    { id: "74", original: "قصف مدنيين", replacement: "قـ.ـصف مدنـ،ـيين" },
+    { id: "75", original: "جرائم إسرائيل", replacement: "جـ،ـرائم إسـ.ـرائيل" },
+    { id: "76", original: "جرائم حرب", replacement: "جـ.ـرائم حـ،ـرب" },
+    { id: "77", original: "استخدام الفسفور", replacement: "استخـ،ـدام الفـ.ـسفور" },
+    { id: "78", original: "قصف مستشفى", replacement: "قـ.ـصف مستـ،ـشفى" },
+    { id: "79", original: "إبادة عائلات", replacement: "إبـ،ـادة عـ.ـائلات" },
+    { id: "80", original: "تدمير أبراج", replacement: "تدمـ.ـير أبـ،ـراج" },
+    { id: "81", original: "قاطعوا إسرائيل", replacement: "قاطـ،ـعوا إسـ.ـرائيل" },
+    { id: "82", original: "المقاومة مستمرة", replacement: "المقـ.ـاومة مستـ،ـمرة" },
+    { id: "83", original: "الحق الفلسطيني", replacement: "الحـ،ـق الفلسـ.ـطيني" },
+    { id: "84", original: "من البحر إلى النهر", replacement: "من البـ.ـحر إلـ،ـى النـ.ـهر" },
+    { id: "85", original: "القضية المركزية", replacement: "القضـ،ـية المـ.ـركزية" }
   ];
 };
 

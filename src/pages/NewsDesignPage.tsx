@@ -32,11 +32,18 @@ import {
   Grid,
   Download,
   Trash,
+  Image,
+  Maximize,
+  Minimize,
+  Square,
+  Move,
+  RectangleHorizontal
 } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { Slider } from "@/components/ui/slider";
 
 // افتراض أننا سنجلب هذه البيانات من ملفات التكوين عن طريق API في المستقبل
 const templateData = [
@@ -98,6 +105,43 @@ const colorOptions = [
   { value: "#264653", label: "كحلي" }
 ];
 
+// بيانات الشعار
+const logoOptions = {
+  square: "https://i.ibb.co/3vctvJw/logo-square.png", // شعار مربع
+  horizontal: "https://i.ibb.co/kqnQfPz/logo-horizontal.png" // شعار أفقي
+};
+
+// نوع العنصر (نص أو صورة)
+type ElementType = "text" | "image";
+
+// واجهة لكل عنصر
+interface DesignElement {
+  id: number;
+  type: ElementType;
+  content?: string; // للنصوص
+  src?: string; // للصور
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity?: number; // للشفافية
+  
+  // خصائص النص
+  font?: string;
+  size?: number;
+  color?: string;
+  align?: string;
+  direction?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  shadow?: boolean;
+  shadowColor?: string;
+  stroke?: boolean;
+  strokeColor?: string;
+  backgroundColor?: string;
+}
+
 const NewsDesignPage = () => {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -107,11 +151,12 @@ const NewsDesignPage = () => {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [showGrid, setShowGrid] = useState(false);
   const [textContent, setTextContent] = useState("");
-  const [activeTextId, setActiveTextId] = useState<number | null>(null);
-  const [textElements, setTextElements] = useState<any[]>([]);
-  const [textCounter, setTextCounter] = useState(0);
+  const [activeElementId, setActiveElementId] = useState<number | null>(null);
+  const [elements, setElements] = useState<DesignElement[]>([]);
+  const [elementCounter, setElementCounter] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isResizing, setIsResizing] = useState(false);
   
   // Text editing states
   const [selectedFont, setSelectedFont] = useState("Cairo");
@@ -139,6 +184,10 @@ const NewsDesignPage = () => {
   const selectedTemplate = templateData.find(template => template.id === selectedTemplateId) || templateData[0];
   const selectedVariant = selectedTemplate.variants.find(variant => variant.id === selectedVariantId) || selectedTemplate.variants[0];
 
+  const activeElement = activeElementId !== null 
+    ? elements.find(el => el.id === activeElementId) 
+    : null;
+
   // تحميل الصورة المختارة مسبقاً
   useEffect(() => {
     const img = new Image();
@@ -151,7 +200,7 @@ const NewsDesignPage = () => {
 
   // عند تحميل الصفحة، نضيف مربع نص افتراضي في المنتصف
   useEffect(() => {
-    if (textElements.length === 0) {
+    if (elements.length === 0) {
       handleAddText();
     }
   }, []);
@@ -189,12 +238,13 @@ const NewsDesignPage = () => {
     // الحصول على أبعاد مساحة العمل
     const canvasRect = canvasRef.current.getBoundingClientRect();
     const centerX = canvasRect.width / 2 - 100; // نصف عرض مربع النص تقريبًا
-    const centerY = canvasRect.height / 2 - 25; // نصف ارتفاع مربع النص تقريبًا
+    const centerY = canvasRect.height / 2 - 30; // نصف ارتفاع مربع النص تقريبًا
 
-    const newId = textCounter + 1;
-    const newText = {
+    const newId = elementCounter + 1;
+    const newElement: DesignElement = {
       id: newId,
-      content: "نص جديد\nسطر جديد", // جعل النص الافتراضي سطرين
+      type: "text",
+      content: "نص جديد",
       x: centerX,
       y: centerY,
       font: selectedFont,
@@ -210,14 +260,14 @@ const NewsDesignPage = () => {
       stroke: textStroke,
       strokeColor: textStrokeColor,
       backgroundColor: textBackgroundColor,
-      width: 200, // عرض كافٍ لسطرين
-      height: 60  // زيادة الارتفاع ليناسب سطرين
+      width: 200,
+      height: 60  // ارتفاع أكبر للنص
     };
     
-    setTextElements([...textElements, newText]);
-    setActiveTextId(newId);
-    setTextCounter(newId);
-    setTextContent("نص جديد\nسطر جديد");
+    setElements([...elements, newElement]);
+    setActiveElementId(newId);
+    setElementCounter(newId);
+    setTextContent("نص جديد");
 
     toast({
       title: "تم إضافة نص جديد",
@@ -225,92 +275,163 @@ const NewsDesignPage = () => {
     });
   };
 
+  // إضافة شعار مربع
+  const handleAddSquareLogo = () => {
+    if (!canvasRef.current) return;
+
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const centerX = canvasRect.width / 2 - 40; // وسط الكانفاس مع إزاحة
+    const centerY = canvasRect.height - 100; // في أسفل الكانفاس
+
+    const newId = elementCounter + 1;
+    const newElement: DesignElement = {
+      id: newId,
+      type: "image",
+      src: logoOptions.square,
+      x: centerX,
+      y: centerY,
+      width: 80,
+      height: 80,
+      opacity: 1
+    };
+    
+    setElements([...elements, newElement]);
+    setActiveElementId(newId);
+    setElementCounter(newId);
+
+    toast({
+      title: "تم إضافة الشعار المربع",
+      description: "يمكنك تحريك الشعار وتغيير حجمه"
+    });
+  };
+
+  // إضافة شعار أفقي
+  const handleAddHorizontalLogo = () => {
+    if (!canvasRef.current) return;
+
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const centerX = canvasRect.width / 2 - 75; // وسط الكانفاس مع إزاحة
+    const centerY = canvasRect.height - 80; // في أسفل الكانفاس
+
+    const newId = elementCounter + 1;
+    const newElement: DesignElement = {
+      id: newId,
+      type: "image",
+      src: logoOptions.horizontal,
+      x: centerX,
+      y: centerY,
+      width: 150,
+      height: 50,
+      opacity: 1
+    };
+    
+    setElements([...elements, newElement]);
+    setActiveElementId(newId);
+    setElementCounter(newId);
+
+    toast({
+      title: "تم إضافة الشعار الأفقي",
+      description: "يمكنك تحريك الشعار وتغيير حجمه"
+    });
+  };
+
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     setTextContent(newContent);
     
-    if (activeTextId !== null) {
-      setTextElements(textElements.map(text => 
-        text.id === activeTextId ? { ...text, content: newContent } : text
+    if (activeElementId !== null) {
+      setElements(elements.map(element => 
+        element.id === activeElementId && element.type === "text" 
+          ? { ...element, content: newContent } 
+          : element
       ));
     }
   };
 
   // Element dragging functions
-  const handleTextMouseDown = (e: React.MouseEvent, id: number) => {
+  const handleElementMouseDown = (e: React.MouseEvent, id: number) => {
     e.preventDefault();
-    setActiveTextId(id);
+    setActiveElementId(id);
     setIsDragging(true);
 
-    const text = textElements.find(text => text.id === id);
-    if (text) {
-      const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const element = elements.find(el => el.id === id);
+    if (element) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       setDragOffset({
         x: e.clientX - rect.left,
         y: e.clientY - rect.top
       });
 
-      setTextContent(text.content);
-      setSelectedFont(text.font);
-      setFontSize(text.size);
-      setTextAlign(text.align);
-      setTextColor(text.color);
-      setTextDirection(text.direction);
-      setTextBold(text.bold);
-      setTextItalic(text.italic);
-      setTextUnderline(text.underline);
-      setTextShadow(text.shadow);
-      setTextShadowColor(text.shadowColor);
-      setTextStroke(text.stroke);
-      setTextStrokeColor(text.strokeColor);
-      setTextBackgroundColor(text.backgroundColor);
+      if (element.type === "text") {
+        setTextContent(element.content || "");
+        setSelectedFont(element.font || "Cairo");
+        setFontSize(element.size || 24);
+        setTextAlign(element.align || "right");
+        setTextColor(element.color || "#ffffff");
+        setTextDirection(element.direction || "rtl");
+        setTextBold(element.bold || false);
+        setTextItalic(element.italic || false);
+        setTextUnderline(element.underline || false);
+        setTextShadow(element.shadow || false);
+        setTextShadowColor(element.shadowColor || "#000000");
+        setTextStroke(element.stroke || false);
+        setTextStrokeColor(element.strokeColor || "#000000");
+        setTextBackgroundColor(element.backgroundColor || "transparent");
+      }
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || activeTextId === null) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left - dragOffset.x;
-    const y = e.clientY - rect.top - dragOffset.y;
+    if (isDragging && activeElementId !== null && !isResizing) {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.max(0, Math.min(e.clientX - rect.left - dragOffset.x, rect.width - 10));
+      const y = Math.max(0, Math.min(e.clientY - rect.top - dragOffset.y, rect.height - 10));
 
-    setTextElements(textElements.map(text => 
-      text.id === activeTextId ? { ...text, x, y } : text
-    ));
+      setElements(elements.map(element => 
+        element.id === activeElementId ? { ...element, x, y } : element
+      ));
+    }
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setIsResizing(false);
   };
 
-  const updateActiveTextStyle = (property: string, value: any) => {
-    if (activeTextId === null) return;
+  const updateActiveElementStyle = (property: string, value: any) => {
+    if (activeElementId === null) return;
     
-    setTextElements(textElements.map(text => 
-      text.id === activeTextId ? { ...text, [property]: value } : text
+    setElements(elements.map(element => 
+      element.id === activeElementId ? { ...element, [property]: value } : element
     ));
   };
 
-  const resizeTextElement = (width: number, height: number) => {
-    if (activeTextId === null) return;
+  const handleOpacityChange = (value: number[]) => {
+    if (activeElementId === null) return;
     
-    setTextElements(textElements.map(text => 
-      text.id === activeTextId ? { ...text, width, height } : text
+    setElements(elements.map(element => 
+      element.id === activeElementId ? { ...element, opacity: value[0] / 100 } : element
     ));
+  };
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
   };
 
   const handleRemoveElement = () => {
-    if (activeTextId === null) return;
+    if (activeElementId === null) return;
     
-    setTextElements(textElements.filter(text => text.id !== activeTextId));
-    setActiveTextId(null);
+    setElements(elements.filter(element => element.id !== activeElementId));
+    setActiveElementId(null);
     
     toast({
       title: "تم حذف العنصر",
-      description: "تم حذف النص بنجاح"
+      description: "تم حذف العنصر بنجاح"
     });
   };
 
@@ -345,74 +466,107 @@ const NewsDesignPage = () => {
       // رسم صورة القالب
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       
-      // حساب النسبة بين أبعاد الصورة الأصلية والمعروضة
+      // الحصول على حاوية الكانفاس المرئية
       const canvasElement = canvasRef.current;
       if (!canvasElement) return;
       
-      const displayedRect = canvasElement.getBoundingClientRect();
-      
-      // تحسين: الحصول على صحة محتوى الصورة في النافذة
+      // الحصول على عناصر DOM الحقيقية للصورة والعناصر
       const imgElement = canvasElement.querySelector('img');
-      const imgRect = imgElement?.getBoundingClientRect();
+      if (!imgElement) return;
       
-      if (!imgRect) return;
+      const imgRect = imgElement.getBoundingClientRect();
+      const containerRect = canvasElement.getBoundingClientRect();
       
-      // استخدام أبعاد الصورة المعروضة بدلاً من أبعاد الكانفاس للحصول على تحويل أكثر دقة
-      const adjustedScaleX = img.naturalWidth / imgRect.width;
-      const adjustedScaleY = img.naturalHeight / imgRect.height;
+      // حساب عاملي التحويل
+      const scaleX = img.naturalWidth / imgRect.width;
+      const scaleY = img.naturalHeight / imgRect.height;
       
-      // رسم جميع عناصر النص
-      textElements.forEach(text => {
-        ctx.save();
+      // رسم جميع العناصر
+      elements.forEach(element => {
+        // حساب الموقع النسبي للعنصر داخل الكانفاس
+        const elementDOM = document.getElementById(`element-${element.id}`);
+        if (!elementDOM) return;
         
-        // تطبيق تنسيقات النص
-        let fontStyle = '';
-        if (text.bold) fontStyle += 'bold ';
-        if (text.italic) fontStyle += 'italic ';
-        fontStyle += `${text.size * adjustedScaleY}px ${text.font}`;
-        ctx.font = fontStyle;
-        ctx.fillStyle = text.color;
-        ctx.textAlign = text.align as CanvasTextAlign;
-        ctx.direction = text.direction === 'rtl' ? 'rtl' : 'ltr';
+        const elementRect = elementDOM.getBoundingClientRect();
         
-        // تصحيح موضع النص باستخدام أبعاد الصورة الحقيقية بدلاً من الكانفاس
-        // حساب الإزاحة الدقيقة من حافة الصورة
-        const imgLeft = imgRect.left - displayedRect.left;
-        const imgTop = imgRect.top - displayedRect.top;
+        // حساب موقع العنصر بالنسبة لصورة القالب
+        const relativeX = elementRect.left - imgRect.left;
+        const relativeY = elementRect.top - imgRect.top;
         
-        // حساب المواقع النسبية للنص داخل صورة العرض
-        const relativeX = text.x - imgLeft;
-        const relativeY = text.y - imgTop;
+        // تحويل الإحداثيات إلى مقياس الصورة الأصلية
+        const scaledX = relativeX * scaleX;
+        const scaledY = relativeY * scaleY;
+        const scaledWidth = elementRect.width * scaleX;
+        const scaledHeight = elementRect.height * scaleY;
         
-        if (text.shadow) {
-          ctx.shadowColor = text.shadowColor;
-          ctx.shadowBlur = 4 * adjustedScaleY;
-          ctx.shadowOffsetX = 2 * adjustedScaleX;
-          ctx.shadowOffsetY = 2 * adjustedScaleY;
-        }
-        
-        if (text.stroke) {
-          ctx.strokeStyle = text.strokeColor;
-          ctx.lineWidth = 2 * adjustedScaleY;
-        }
-        
-        // رسم النص مع مراعاة الرجوع للسطر التالي
-        const lines = text.content.split('\n');
-        const lineHeight = text.size * 1.2; // ارتفاع السطر (1.2 من حجم النص)
-        
-        lines.forEach((line: string, index: number) => {
-          // استخدام الإحداثيات النسبية المصححة
-          const yPosition = (relativeY + (index * lineHeight)) * adjustedScaleY;
-          const xPosition = relativeX * adjustedScaleX;
+        if (element.type === "text" && element.content) {
+          ctx.save();
           
-          if (text.stroke) {
-            ctx.strokeText(line, xPosition, yPosition);
+          // تطبيق تنسيقات النص
+          let fontStyle = '';
+          if (element.bold) fontStyle += 'bold ';
+          if (element.italic) fontStyle += 'italic ';
+          fontStyle += `${element.size! * scaleY}px ${element.font}`;
+          ctx.font = fontStyle;
+          ctx.fillStyle = element.color || "#ffffff";
+          ctx.textAlign = element.align as CanvasTextAlign || "right";
+          ctx.direction = element.direction === 'rtl' ? 'rtl' : 'ltr';
+          
+          if (element.shadow) {
+            ctx.shadowColor = element.shadowColor || "#000000";
+            ctx.shadowBlur = 4 * scaleY;
+            ctx.shadowOffsetX = 2 * scaleX;
+            ctx.shadowOffsetY = 2 * scaleY;
           }
           
-          ctx.fillText(line, xPosition, yPosition);
-        });
-        
-        ctx.restore();
+          if (element.stroke) {
+            ctx.strokeStyle = element.strokeColor || "#000000";
+            ctx.lineWidth = 2 * scaleY;
+          }
+          
+          // حساب الإزاحة لمحاذاة النص
+          let xOffset = 0;
+          if (element.align === "center") {
+            xOffset = scaledWidth / 2;
+          } else if (element.align === "right") {
+            xOffset = scaledWidth;
+          }
+          
+          // رسم النص مع مراعاة الرجوع للسطر التالي
+          const lines = element.content.split('\n');
+          const lineHeight = element.size! * 1.2 * scaleY; // ارتفاع السطر
+          
+          lines.forEach((line: string, index: number) => {
+            const yPosition = scaledY + (index * lineHeight / scaleY) * scaleY;
+            
+            if (element.stroke) {
+              ctx.strokeText(line, scaledX + xOffset, yPosition + (element.size! * 0.8 * scaleY));
+            }
+            
+            ctx.fillText(line, scaledX + xOffset, yPosition + (element.size! * 0.8 * scaleY));
+          });
+          
+          ctx.restore();
+        } else if (element.type === "image" && element.src) {
+          // رسم الصورة (الشعار)
+          const logoImg = new Image();
+          logoImg.src = element.src;
+          
+          // استخدام الشفافية إذا كانت محددة
+          if (element.opacity !== undefined) {
+            ctx.globalAlpha = element.opacity;
+          }
+          
+          ctx.drawImage(
+            logoImg, 
+            scaledX, 
+            scaledY, 
+            scaledWidth, 
+            scaledHeight
+          );
+          
+          ctx.globalAlpha = 1.0; // إعادة تعيين الشفافية
+        }
       });
       
       // تحويل إلى صورة وتنزيلها
@@ -531,6 +685,14 @@ const NewsDesignPage = () => {
                         <Text className="h-5 w-5 mb-1" />
                         <span>إضافة نص</span>
                       </Button>
+                      <Button variant="outline" className="flex flex-col h-auto py-3" onClick={handleAddSquareLogo}>
+                        <Square className="h-5 w-5 mb-1" />
+                        <span>شعار مربع</span>
+                      </Button>
+                      <Button variant="outline" className="flex flex-col h-auto py-3" onClick={handleAddHorizontalLogo}>
+                        <RectangleHorizontal className="h-5 w-5 mb-1" />
+                        <span>شعار أفقي</span>
+                      </Button>
                       <Button variant="outline" className="flex flex-col h-auto py-3" onClick={() => setShowGrid(!showGrid)}>
                         <Grid className="h-5 w-5 mb-1" />
                         <span>{showGrid ? 'إخفاء الشبكة' : 'إظهار الشبكة'}</span>
@@ -539,7 +701,7 @@ const NewsDesignPage = () => {
                         variant="outline" 
                         className="flex flex-col h-auto py-3"
                         onClick={handleRemoveElement}
-                        disabled={activeTextId === null}
+                        disabled={activeElementId === null}
                       >
                         <Trash className="h-5 w-5 mb-1" />
                         <span>حذف العنصر</span>
@@ -549,7 +711,7 @@ const NewsDesignPage = () => {
                 </Card>
 
                 {/* Text Editing Options */}
-                {activeTextId !== null && (
+                {activeElement?.type === "text" && (
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-lg">تحرير النص</CardTitle>
@@ -576,7 +738,7 @@ const NewsDesignPage = () => {
                             onClick={() => {
                               const newSize = Math.max(8, fontSize - 2);
                               setFontSize(newSize);
-                              updateActiveTextStyle('size', newSize);
+                              updateActiveElementStyle('size', newSize);
                             }}
                           >
                             <span className="text-lg">-</span>
@@ -591,7 +753,7 @@ const NewsDesignPage = () => {
                             onChange={(e) => {
                               const newSize = parseInt(e.target.value);
                               setFontSize(newSize);
-                              updateActiveTextStyle('size', newSize);
+                              updateActiveElementStyle('size', newSize);
                             }}
                           />
                           <Button 
@@ -601,7 +763,7 @@ const NewsDesignPage = () => {
                             onClick={() => {
                               const newSize = Math.min(120, fontSize + 2);
                               setFontSize(newSize);
-                              updateActiveTextStyle('size', newSize);
+                              updateActiveElementStyle('size', newSize);
                             }}
                           >
                             <span className="text-lg">+</span>
@@ -615,7 +777,7 @@ const NewsDesignPage = () => {
                           value={selectedFont}
                           onValueChange={(val) => {
                             setSelectedFont(val);
-                            updateActiveTextStyle('font', val);
+                            updateActiveElementStyle('font', val);
                           }}
                         >
                           <SelectTrigger id="font" className="mt-1">
@@ -638,7 +800,7 @@ const NewsDesignPage = () => {
                             className="w-full"
                             onClick={() => {
                               setTextAlign("right");
-                              updateActiveTextStyle('align', 'right');
+                              updateActiveElementStyle('align', 'right');
                             }}
                           >
                             يمين
@@ -649,7 +811,7 @@ const NewsDesignPage = () => {
                             className="w-full"
                             onClick={() => {
                               setTextAlign("center");
-                              updateActiveTextStyle('align', 'center');
+                              updateActiveElementStyle('align', 'center');
                             }}
                           >
                             وسط
@@ -660,7 +822,7 @@ const NewsDesignPage = () => {
                             className="w-full"
                             onClick={() => {
                               setTextAlign("left");
-                              updateActiveTextStyle('align', 'left');
+                              updateActiveElementStyle('align', 'left');
                             }}
                           >
                             يسار
@@ -679,7 +841,7 @@ const NewsDesignPage = () => {
                               style={{ backgroundColor: color.value }}
                               onClick={() => {
                                 setTextColor(color.value);
-                                updateActiveTextStyle('color', color.value);
+                                updateActiveElementStyle('color', color.value);
                               }}
                               title={color.label}
                             />
@@ -697,7 +859,7 @@ const NewsDesignPage = () => {
                             onClick={() => {
                               const newValue = !textBold;
                               setTextBold(newValue);
-                              updateActiveTextStyle('bold', newValue);
+                              updateActiveElementStyle('bold', newValue);
                             }}
                           >
                             عريض
@@ -709,7 +871,7 @@ const NewsDesignPage = () => {
                             onClick={() => {
                               const newValue = !textItalic;
                               setTextItalic(newValue);
-                              updateActiveTextStyle('italic', newValue);
+                              updateActiveElementStyle('italic', newValue);
                             }}
                           >
                             مائل
@@ -721,7 +883,7 @@ const NewsDesignPage = () => {
                             onClick={() => {
                               const newValue = !textUnderline;
                               setTextUnderline(newValue);
-                              updateActiveTextStyle('underline', newValue);
+                              updateActiveElementStyle('underline', newValue);
                             }}
                           >
                             تسطير
@@ -733,10 +895,77 @@ const NewsDesignPage = () => {
                             onClick={() => {
                               const newValue = !textShadow;
                               setTextShadow(newValue);
-                              updateActiveTextStyle('shadow', newValue);
+                              updateActiveElementStyle('shadow', newValue);
                             }}
                           >
                             ظل
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Image Editing Options */}
+                {activeElement?.type === "image" && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">تعديل الصورة</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="opacity">الشفافية</Label>
+                        <div className="pt-2">
+                          <Slider
+                            defaultValue={[(activeElement.opacity || 1) * 100]}
+                            max={100}
+                            step={1}
+                            onValueChange={handleOpacityChange}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>المقاس</Label>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              if (activeElementId === null) return;
+                              const element = elements.find(el => el.id === activeElementId);
+                              if (!element) return;
+                              
+                              const newWidth = element.width * 0.9;
+                              const newHeight = element.height * 0.9;
+                              
+                              setElements(elements.map(el => 
+                                el.id === activeElementId 
+                                  ? { ...el, width: newWidth, height: newHeight } 
+                                  : el
+                              ));
+                            }}
+                          >
+                            <Minimize className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              if (activeElementId === null) return;
+                              const element = elements.find(el => el.id === activeElementId);
+                              if (!element) return;
+                              
+                              const newWidth = element.width * 1.1;
+                              const newHeight = element.height * 1.1;
+                              
+                              setElements(elements.map(el => 
+                                el.id === activeElementId 
+                                  ? { ...el, width: newWidth, height: newHeight } 
+                                  : el
+                              ));
+                            }}
+                          >
+                            <Maximize className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
@@ -772,7 +1001,7 @@ const NewsDesignPage = () => {
                   <CardContent className="flex items-center justify-center p-0 min-h-[500px] bg-muted/30 overflow-auto">
                     <div 
                       ref={canvasRef}
-                      className="relative"
+                      className="relative select-none"
                       style={{
                         transform: `scale(${zoomLevel / 100})`,
                         transition: 'transform 0.2s',
@@ -782,7 +1011,7 @@ const NewsDesignPage = () => {
                               selectedVariant.ratio === "4:5" ? '400px' : '280px',
                         maxWidth: '100%'
                       }}
-                      onMouseMove={isDragging ? handleMouseMove : undefined}
+                      onMouseMove={handleMouseMove}
                       onMouseUp={handleMouseUp}
                       onMouseLeave={handleMouseUp}
                     >
@@ -807,65 +1036,87 @@ const NewsDesignPage = () => {
                           crossOrigin="anonymous"
                         />
                         
-                        {/* Text Elements */}
-                        {textElements.map((text) => (
+                        {/* All Elements */}
+                        {elements.map((element) => (
                           <div 
-                            key={text.id}
-                            className={`absolute cursor-move ${activeTextId === text.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                            key={element.id}
+                            id={`element-${element.id}`}
+                            className={`absolute cursor-move ${activeElementId === element.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                             style={{
-                              left: `${text.x}px`,
-                              top: `${text.y}px`,
-                              fontFamily: text.font,
-                              fontSize: `${text.size}px`,
-                              color: text.color,
-                              textAlign: text.align,
-                              direction: text.direction,
-                              fontWeight: text.bold ? 'bold' : 'normal',
-                              fontStyle: text.italic ? 'italic' : 'normal',
-                              textDecoration: text.underline ? 'underline' : 'none',
-                              textShadow: text.shadow ? `1px 1px 2px ${text.shadowColor}` : 'none',
-                              backgroundColor: text.backgroundColor !== 'transparent' ? text.backgroundColor : 'transparent',
-                              WebkitTextStroke: text.stroke ? `1px ${text.strokeColor}` : 'none',
-                              padding: '4px',
-                              width: text.width ? `${text.width}px` : 'auto',
-                              minWidth: '30px',
-                              minHeight: '20px',
-                              zIndex: 20
+                              left: `${element.x}px`,
+                              top: `${element.y}px`,
+                              width: element.width ? `${element.width}px` : 'auto',
+                              height: element.height ? `${element.height}px` : 'auto',
+                              opacity: element.opacity !== undefined ? element.opacity : 1,
+                              ...(element.type === "text" ? {
+                                fontFamily: element.font,
+                                fontSize: `${element.size}px`,
+                                color: element.color,
+                                textAlign: element.align as any,
+                                direction: element.direction,
+                                fontWeight: element.bold ? 'bold' : 'normal',
+                                fontStyle: element.italic ? 'italic' : 'normal',
+                                textDecoration: element.underline ? 'underline' : 'none',
+                                textShadow: element.shadow ? `1px 1px 2px ${element.shadowColor}` : 'none',
+                                backgroundColor: element.backgroundColor !== 'transparent' ? element.backgroundColor : 'transparent',
+                                WebkitTextStroke: element.stroke ? `1px ${element.strokeColor}` : 'none',
+                                padding: '4px',
+                                minWidth: '30px',
+                                minHeight: '20px',
+                                userSelect: 'none' as any,
+                              } : {}),
+                              zIndex: element.type === "image" ? 10 : 20
                             }}
-                            onMouseDown={(e) => handleTextMouseDown(e, text.id)}
+                            onMouseDown={(e) => handleElementMouseDown(e, element.id)}
                           >
-                            {text.content || "نص جديد"}
+                            {element.type === "text" && (
+                              element.content || "نص جديد"
+                            )}
+                            
+                            {element.type === "image" && (
+                              <img 
+                                src={element.src} 
+                                alt="شعار" 
+                                className="w-full h-full object-contain" 
+                                draggable={false}
+                              />
+                            )}
                             
                             {/* Resize handle - only shown when element is active */}
-                            {activeTextId === text.id && (
-                              <div className="absolute bottom-0 right-0 w-5 h-5 bg-primary opacity-50 cursor-nwse-resize"
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    const startWidth = text.width || 200;
-                                    const startHeight = text.height || 50;
-                                    const startX = e.clientX;
-                                    const startY = e.clientY;
+                            {activeElementId === element.id && (
+                              <div 
+                                className="absolute bottom-0 right-0 w-5 h-5 bg-primary opacity-50 cursor-nwse-resize"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  setIsResizing(true);
+                                  
+                                  const startWidth = element.width || 200;
+                                  const startHeight = element.height || 50;
+                                  const startX = e.clientX;
+                                  const startY = e.clientY;
+                                  
+                                  const handleResize = (moveEvent: MouseEvent) => {
+                                    if (!isResizing) return;
                                     
-                                    const handleMouseMove = (moveEvent: MouseEvent) => {
-                                      const dx = moveEvent.clientX - startX;
-                                      const dy = moveEvent.clientY - startY;
-                                      const newWidth = startWidth + dx;
-                                      const newHeight = startHeight + dy;
-                                      
-                                      resizeTextElement(
-                                        Math.max(30, newWidth), 
-                                        Math.max(20, newHeight)
-                                      );
-                                    };
+                                    const dx = moveEvent.clientX - startX;
+                                    const dy = moveEvent.clientY - startY;
+                                    const newWidth = Math.max(30, startWidth + dx);
+                                    const newHeight = Math.max(20, startHeight + dy);
                                     
-                                    const handleMouseUp = () => {
-                                      document.removeEventListener('mousemove', handleMouseMove);
-                                      document.removeEventListener('mouseup', handleMouseUp);
-                                    };
-                                    
-                                    document.addEventListener('mousemove', handleMouseMove);
-                                    document.addEventListener('mouseup', handleMouseUp);
-                                  }}
+                                    setElements(elements.map(el => 
+                                      el.id === element.id ? { ...el, width: newWidth, height: newHeight } : el
+                                    ));
+                                  };
+                                  
+                                  const handleResizeEnd = () => {
+                                    setIsResizing(false);
+                                    document.removeEventListener('mousemove', handleResize);
+                                    document.removeEventListener('mouseup', handleResizeEnd);
+                                  };
+                                  
+                                  document.addEventListener('mousemove', handleResize);
+                                  document.addEventListener('mouseup', handleResizeEnd);
+                                }}
                               ></div>
                             )}
                           </div>

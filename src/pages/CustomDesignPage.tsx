@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -31,11 +32,16 @@ import {
   Download,
   Trash,
   Save,
-  ArrowUp
+  ArrowUp,
+  Square,
+  MoveHorizontal,
+  Opacity,
+  ImageIcon
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 
 // افتراض أننا سنجلب هذه البيانات من ملفات التكوين عن طريق API في المستقبل
@@ -67,6 +73,53 @@ const colorOptions = [
   { value: "#264653", label: "كحلي" }
 ];
 
+// وضع الصور من بيانات التكوين
+const logoOptions = {
+  squareLogo: "https://placehold.co/400x400/png?text=شعار+مربع",
+  horizontalLogo: "https://placehold.co/600x150/png?text=شعار+أفقي",
+};
+
+// تعريف الأنواع للعناصر
+type ElementType = "text" | "logo";
+
+interface ElementBase {
+  id: number;
+  type: ElementType;
+  x: number;
+  y: number;
+  opacity: number;
+}
+
+interface TextElement extends ElementBase {
+  type: "text";
+  content: string;
+  font: string;
+  size: number;
+  color: string;
+  align: string;
+  direction: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  shadow: boolean;
+  shadowColor: string;
+  stroke: boolean;
+  strokeColor: string;
+  backgroundColor: string;
+  width: number;
+  height: number;
+}
+
+interface LogoElement extends ElementBase {
+  type: "logo";
+  logoType: "square" | "horizontal";
+  width: number;
+  height: number;
+  source: string;
+}
+
+type DesignElement = TextElement | LogoElement;
+
 const CustomDesignPage = () => {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -74,9 +127,9 @@ const CustomDesignPage = () => {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [showGrid, setShowGrid] = useState(false);
   const [textContent, setTextContent] = useState("");
-  const [activeTextId, setActiveTextId] = useState<number | null>(null);
-  const [textElements, setTextElements] = useState<any[]>([]);
-  const [textCounter, setTextCounter] = useState(0);
+  const [activeElementId, setActiveElementId] = useState<number | null>(null);
+  const [elements, setElements] = useState<DesignElement[]>([]);
+  const [elementCounter, setElementCounter] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   
@@ -105,6 +158,8 @@ const CustomDesignPage = () => {
   
   // كائن الصورة الذي سنستخدمه للتصدير
   const customImg = useRef<HTMLImageElement | null>(null);
+  // مرجع للصورة المعروضة في واجهة المستخدم
+  const displayedImgRef = useRef<HTMLImageElement | null>(null);
 
   // إذا كانت هناك صورة خلفية، احفظها كصورة لاستخدامها لاحقًا في التصدير
   useEffect(() => {
@@ -120,10 +175,20 @@ const CustomDesignPage = () => {
 
   // عند تحميل الصفحة، نضيف مربع نص افتراضي إذا كانت هناك صورة خلفية
   useEffect(() => {
-    if (backgroundImage && textElements.length === 0) {
+    if (backgroundImage && elements.length === 0) {
       handleAddText();
     }
   }, [backgroundImage]);
+
+  useEffect(() => {
+    // تحديث مرجع الصورة المعروضة بعد التحميل
+    if (canvasRef.current && backgroundImage) {
+      const imgElement = canvasRef.current.querySelector('img');
+      if (imgElement) {
+        displayedImgRef.current = imgElement;
+      }
+    }
+  }, [backgroundImage, canvasRef.current]);
 
   const handleZoomIn = () => {
     if (zoomLevel < 200) {
@@ -143,12 +208,13 @@ const CustomDesignPage = () => {
     // الحصول على أبعاد مساحة العمل
     const canvasRect = canvasRef.current.getBoundingClientRect();
     const centerX = canvasRect.width / 2 - 100; // نصف عرض مربع النص تقريبًا
-    const centerY = canvasRect.height / 2 - 25; // نصف ارتفاع مربع النص تقريبًا
+    const centerY = canvasRect.height / 2 - 30; // نصف ارتفاع مربع النص تقريبًا
 
-    const newId = textCounter + 1;
-    const newText = {
+    const newId = elementCounter + 1;
+    const newText: TextElement = {
       id: newId,
-      content: "نص جديد\nسطر جديد", // جعل النص الافتراضي سطرين
+      type: "text",
+      content: "نص جديد",
       x: centerX,
       y: centerY,
       font: selectedFont,
@@ -164,18 +230,68 @@ const CustomDesignPage = () => {
       stroke: textStroke,
       strokeColor: textStrokeColor,
       backgroundColor: textBackgroundColor,
-      width: 200, // عرض كافٍ لسطرين
-      height: 60  // زيادة الارتفاع ليناسب سطرين
+      width: 200, // عرض كافٍ للنص
+      height: 60,  // ارتفاع كافٍ لسطرين
+      opacity: 1
     };
     
-    setTextElements([...textElements, newText]);
-    setActiveTextId(newId);
-    setTextCounter(newId);
-    setTextContent("نص جديد\nسطر جديد");
+    setElements(prev => [...prev, newText]);
+    setActiveElementId(newId);
+    setElementCounter(newId);
+    setTextContent("نص جديد");
 
     toast({
       title: "تم إضافة نص جديد",
       description: "يمكنك الآن تحرير النص وتنسيقه"
+    });
+  };
+
+  const handleAddLogo = (logoType: "square" | "horizontal") => {
+    if (!canvasRef.current) return;
+    
+    // الحصول على أبعاد مساحة العمل
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    
+    // تحديد موقع الشعار استنادًا إلى نوعه وحجمه
+    let posX: number, posY: number, logoWidth: number, logoHeight: number;
+    
+    // اختيار مصدر الشعار بناءً على نوعه
+    const logoSrc = logoType === "square" 
+      ? logoOptions.squareLogo
+      : logoOptions.horizontalLogo;
+    
+    if (logoType === "square") {
+      logoWidth = 80;
+      logoHeight = 80;
+      posX = canvasRect.width - logoWidth - 20; // الركن العلوي الأيمن
+      posY = 20;
+    } else {
+      logoWidth = 200;
+      logoHeight = 60;
+      posX = canvasRect.width / 2 - logoWidth / 2; // في الوسط أعلى الصورة
+      posY = 20;
+    }
+
+    const newId = elementCounter + 1;
+    const newLogo: LogoElement = {
+      id: newId,
+      type: "logo",
+      logoType,
+      x: posX,
+      y: posY,
+      width: logoWidth,
+      height: logoHeight,
+      source: logoSrc,
+      opacity: 1
+    };
+    
+    setElements(prev => [...prev, newLogo]);
+    setActiveElementId(newId);
+    setElementCounter(newId);
+
+    toast({
+      title: "تم إضافة شعار",
+      description: "يمكنك الآن تحريك الشعار وتغيير حجمه"
     });
   };
 
@@ -198,7 +314,7 @@ const CustomDesignPage = () => {
     setBackgroundImage(imageUrl);
     
     // إضافة نص افتراضي إذا لم يكن هناك نصوص بعد
-    if (textElements.length === 0) {
+    if (elements.length === 0) {
       setTimeout(handleAddText, 100); // تأخير قليل لضمان تحميل الصورة
     }
 
@@ -212,46 +328,62 @@ const CustomDesignPage = () => {
     const newContent = e.target.value;
     setTextContent(newContent);
     
-    if (activeTextId !== null) {
-      setTextElements(textElements.map(text => 
-        text.id === activeTextId ? { ...text, content: newContent } : text
-      ));
+    if (activeElementId !== null) {
+      setElements(elements.map(elem => {
+        if (elem.id === activeElementId && elem.type === "text") {
+          return { ...elem, content: newContent };
+        }
+        return elem;
+      }));
     }
   };
 
+  const handleSetOpacity = (value: number[]) => {
+    if (activeElementId === null) return;
+    
+    setElements(elements.map(elem => {
+      if (elem.id === activeElementId) {
+        return { ...elem, opacity: value[0] };
+      }
+      return elem;
+    }));
+  };
+
   // Element dragging functions
-  const handleTextMouseDown = (e: React.MouseEvent, id: number) => {
+  const handleElementMouseDown = (e: React.MouseEvent, id: number) => {
     e.preventDefault();
-    setActiveTextId(id);
+    setActiveElementId(id);
     setIsDragging(true);
 
-    const text = textElements.find(text => text.id === id);
-    if (text) {
-      const rect = (e.target as HTMLElement).getBoundingClientRect();
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      });
+    const element = elements.find(elem => elem.id === id);
+    if (!element) return;
 
-      setTextContent(text.content);
-      setSelectedFont(text.font);
-      setFontSize(text.size);
-      setTextAlign(text.align);
-      setTextColor(text.color);
-      setTextDirection(text.direction);
-      setTextBold(text.bold);
-      setTextItalic(text.italic);
-      setTextUnderline(text.underline);
-      setTextShadow(text.shadow);
-      setTextShadowColor(text.shadowColor);
-      setTextStroke(text.stroke);
-      setTextStrokeColor(text.strokeColor);
-      setTextBackgroundColor(text.backgroundColor);
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+
+    if (element.type === "text") {
+      setTextContent(element.content);
+      setSelectedFont(element.font);
+      setFontSize(element.size);
+      setTextAlign(element.align);
+      setTextColor(element.color);
+      setTextDirection(element.direction);
+      setTextBold(element.bold);
+      setTextItalic(element.italic);
+      setTextUnderline(element.underline);
+      setTextShadow(element.shadow);
+      setTextShadowColor(element.shadowColor);
+      setTextStroke(element.stroke);
+      setTextStrokeColor(element.strokeColor);
+      setTextBackgroundColor(element.backgroundColor);
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || activeTextId === null) return;
+    if (!isDragging || activeElementId === null) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -260,8 +392,8 @@ const CustomDesignPage = () => {
     const x = e.clientX - rect.left - dragOffset.x;
     const y = e.clientY - rect.top - dragOffset.y;
 
-    setTextElements(textElements.map(text => 
-      text.id === activeTextId ? { ...text, x, y } : text
+    setElements(elements.map(elem => 
+      elem.id === activeElementId ? { ...elem, x, y } : elem
     ));
   };
 
@@ -270,30 +402,40 @@ const CustomDesignPage = () => {
   };
 
   const updateActiveTextStyle = (property: string, value: any) => {
-    if (activeTextId === null) return;
+    if (activeElementId === null) return;
     
-    setTextElements(textElements.map(text => 
-      text.id === activeTextId ? { ...text, [property]: value } : text
-    ));
+    setElements(elements.map(elem => {
+      if (elem.id === activeElementId && elem.type === "text") {
+        return { ...elem, [property]: value };
+      }
+      return elem;
+    }));
   };
 
-  const resizeTextElement = (width: number, height: number) => {
-    if (activeTextId === null) return;
+  const resizeElement = (width: number, height: number) => {
+    if (activeElementId === null) return;
     
-    setTextElements(textElements.map(text => 
-      text.id === activeTextId ? { ...text, width, height } : text
-    ));
+    setElements(elements.map(elem => {
+      if (elem.id === activeElementId) {
+        if (elem.type === "text") {
+          return { ...elem, width, height };
+        } else if (elem.type === "logo") {
+          return { ...elem, width, height };
+        }
+      }
+      return elem;
+    }));
   };
 
   const handleRemoveElement = () => {
-    if (activeTextId === null) return;
+    if (activeElementId === null) return;
     
-    setTextElements(textElements.filter(text => text.id !== activeTextId));
-    setActiveTextId(null);
+    setElements(elements.filter(elem => elem.id !== activeElementId));
+    setActiveElementId(null);
     
     toast({
       title: "تم حذف العنصر",
-      description: "تم حذف النص بنجاح"
+      description: "تم حذف العنصر بنجاح"
     });
   };
 
@@ -328,11 +470,12 @@ const CustomDesignPage = () => {
       // رسم صورة الخلفية
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       
-      // الحصول على عناصر التحكم الضرورية من DOM
+      // الحصول على عنصر الكانفاس
       const canvasElement = canvasRef.current;
       if (!canvasElement) return;
       
-      const imgElement = canvasElement.querySelector('img');
+      // الحصول على الصورة المعروضة
+      const imgElement = displayedImgRef.current;
       if (!imgElement) return;
       
       // الحصول على أبعاد الصورة المعروضة في واجهة المستخدم
@@ -343,115 +486,151 @@ const CustomDesignPage = () => {
       const scaleX = img.naturalWidth / displayedRect.width;
       const scaleY = img.naturalHeight / displayedRect.height;
       
-      // رسم جميع عناصر النص
-      textElements.forEach(text => {
-        ctx.save();
+      // رسم جميع عناصر التصميم
+      for (const element of elements) {
+        // تحديد الموضع على الصورة المعروضة
+        const elementNode = canvasElement.querySelector(`[data-element-id="${element.id}"]`) as HTMLElement;
+        if (!elementNode) continue;
         
-        // تطبيق تنسيقات النص
-        let fontStyle = '';
-        if (text.bold) fontStyle += 'bold ';
-        if (text.italic) fontStyle += 'italic ';
-        fontStyle += `${text.size * scaleY}px ${text.font}`;
-        ctx.font = fontStyle;
-        ctx.fillStyle = text.color;
-        ctx.textAlign = text.align as CanvasTextAlign;
-        ctx.direction = text.direction === 'rtl' ? 'rtl' : 'ltr';
+        const elementRect = elementNode.getBoundingClientRect();
         
-        // حساب المواضع النسبية للنص داخل الصورة
-        // تحديد الموضع على الصورة المعروضة أولاً
-        const textElement = canvasElement.querySelector(`div[key="${text.id}"]`) as HTMLElement;
-        let relativeX, relativeY;
-        
-        if (textElement) {
-          // استخدام الموضع الدقيق من العنصر إذا أمكن العثور عليه
-          const textRect = textElement.getBoundingClientRect();
-          // حساب الإزاحة من حافة الصورة
-          relativeX = (textRect.left - displayedRect.left) + (textRect.width / 2);
-          relativeY = (textRect.top - displayedRect.top) + (textRect.height / 2);
-        } else {
-          // استخدام موضع ��لنص المخزن كنسخة احتياطية
-          // حساب الإزاحة من حافة الكانفاس إلى الصورة
-          const offsetX = displayedRect.left - canvasRect.left;
-          const offsetY = displayedRect.top - canvasRect.top;
-          
-          // حساب الموضع النسبي من حافة الصورة
-          relativeX = text.x - offsetX;
-          relativeY = text.y - offsetY;
-        }
+        // حساب الإزاحة من حافة الصورة
+        const relativeX = elementRect.left - displayedRect.left;
+        const relativeY = elementRect.top - displayedRect.top;
         
         // تحويل الموضع النسبي إلى موضع في الصورة الأصلية
         const absoluteX = relativeX * scaleX;
         const absoluteY = relativeY * scaleY;
         
-        if (text.shadow) {
-          ctx.shadowColor = text.shadowColor;
-          ctx.shadowBlur = 4 * scaleY;
-          ctx.shadowOffsetX = 2 * scaleX;
-          ctx.shadowOffsetY = 2 * scaleY;
-        }
-        
-        if (text.stroke) {
-          ctx.strokeStyle = text.strokeColor;
-          ctx.lineWidth = 2 * scaleY;
-        }
-        
-        // رسم خلفية مربع النص إذا كان مطلوباً
-        if (includeTextBg && text.backgroundColor !== 'transparent') {
-          const padding = 5 * scaleY;
-          const lines = text.content.split('\n');
-          const lineHeight = text.size * 1.2 * scaleY;
-          const textHeight = lines.length * lineHeight;
+        if (element.type === "text") {
+          ctx.save();
           
-          ctx.fillStyle = text.backgroundColor;
+          // تطبيق تنسيقات النص
+          let fontStyle = '';
+          if (element.bold) fontStyle += 'bold ';
+          if (element.italic) fontStyle += 'italic ';
+          fontStyle += `${element.size * scaleY}px ${element.font}`;
+          ctx.font = fontStyle;
+          ctx.fillStyle = element.color;
+          ctx.textAlign = element.align as CanvasTextAlign;
+          ctx.direction = element.direction === 'rtl' ? 'rtl' : 'ltr';
+          ctx.globalAlpha = element.opacity;
           
-          let textWidth = 0;
-          for (const line of lines) {
-            const lineWidth = ctx.measureText(line).width;
-            textWidth = Math.max(textWidth, lineWidth);
+          if (element.shadow) {
+            ctx.shadowColor = element.shadowColor;
+            ctx.shadowBlur = 4 * scaleY;
+            ctx.shadowOffsetX = 2 * scaleX;
+            ctx.shadowOffsetY = 2 * scaleY;
           }
           
-          let rectX = absoluteX;
-          if (text.align === 'center') rectX -= textWidth / 2;
-          else if (text.align === 'right') rectX -= textWidth;
-          
-          ctx.fillRect(
-            rectX - padding, 
-            absoluteY - (text.size * scaleY) - padding,
-            textWidth + padding * 2, 
-            textHeight + padding * 2
-          );
-        }
-        
-        // رسم النص مع مراعاة الرجوع للسطر التالي
-        ctx.fillStyle = text.color;
-        const lines = text.content.split('\n');
-        const lineHeight = text.size * 1.2 * scaleY; // ارتفاع السطر (1.2 من حجم النص)
-        
-        lines.forEach((line: string, index: number) => {
-          // تصحيح موضع النص عند الرسم
-          if (text.stroke) {
-            ctx.strokeText(line, absoluteX, absoluteY + (index * lineHeight));
+          if (element.stroke) {
+            ctx.strokeStyle = element.strokeColor;
+            ctx.lineWidth = 2 * scaleY;
           }
           
-          ctx.fillText(line, absoluteX, absoluteY + (index * lineHeight));
+          // رسم خلفية مربع النص إذا كان مطلوباً
+          if (includeTextBg && element.backgroundColor !== 'transparent') {
+            const padding = 5 * scaleY;
+            const lines = element.content.split('\n');
+            const lineHeight = element.size * 1.2 * scaleY;
+            const textHeight = lines.length * lineHeight;
+            
+            ctx.fillStyle = element.backgroundColor;
+            
+            let textWidth = 0;
+            for (const line of lines) {
+              const lineWidth = ctx.measureText(line).width;
+              textWidth = Math.max(textWidth, lineWidth);
+            }
+            
+            // تحديد موضع المستطيل استنادًا إلى محاذاة النص
+            let rectX = absoluteX;
+            const rectY = absoluteY;
+            
+            if (element.align === 'center') rectX -= textWidth / 2;
+            else if (element.align === 'right') rectX -= textWidth;
+            
+            ctx.fillRect(
+              rectX - padding, 
+              rectY - padding,
+              textWidth + padding * 2, 
+              textHeight + padding * 2
+            );
+          }
+          
+          // رسم النص مع مراعاة الرجوع للسطر التالي
+          ctx.fillStyle = element.color;
+          const lines = element.content.split('\n');
+          const lineHeight = element.size * 1.2 * scaleY; // ارتفاع السطر
+          
+          lines.forEach((line: string, index: number) => {
+            // تصحيح موضع النص عند الرسم
+            let textX = absoluteX;
+            let textY = absoluteY + (index * lineHeight) + element.size * 0.8 * scaleY; // إضافة إزاحة للمحاذاة الرأسية
+            
+            if (element.stroke) {
+              ctx.strokeText(line, textX, textY);
+            }
+            
+            ctx.fillText(line, textX, textY);
+          });
+          
+          ctx.restore();
+        } else if (element.type === "logo") {
+          ctx.save();
+          
+          // ضبط شفافية الشعار
+          ctx.globalAlpha = element.opacity;
+          
+          // إنشاء صورة جديدة للشعار
+          const logoImg = new Image();
+          logoImg.crossOrigin = "anonymous";
+          logoImg.src = element.source;
+          
+          // رسم الشعار بعد تحميله
+          logoImg.onload = () => {
+            const scaledWidth = element.width * scaleX;
+            const scaledHeight = element.height * scaleY;
+            ctx.drawImage(logoImg, absoluteX, absoluteY, scaledWidth, scaledHeight);
+            
+            // استكمال عملية التصدير بعد رسم الشعار
+            if (element === elements[elements.length - 1]) {
+              // تحويل إلى صورة وتنزيلها
+              const dataURL = canvas.toDataURL(`image/${fileFormat}`, 1.0);
+              const link = document.createElement('a');
+              link.href = dataURL;
+              link.download = `${fileName}.${fileFormat}`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              toast({
+                title: "تم التصدير بنجاح",
+                description: "تم حفظ التصميم بنجاح"
+              });
+            }
+          };
+          
+          ctx.restore();
+        }
+      }
+      
+      // التصدير إذا لم تكن هناك صور شعارات للانتظار لتحميلها
+      if (!elements.some(elem => elem.type === "logo")) {
+        // تحويل إلى صورة وتنزيلها
+        const dataURL = canvas.toDataURL(`image/${fileFormat}`, 1.0);
+        const link = document.createElement('a');
+        link.href = dataURL;
+        link.download = `${fileName}.${fileFormat}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast({
+          title: "تم التصدير بنجاح",
+          description: "تم حفظ التصميم بنجاح"
         });
-        
-        ctx.restore();
-      });
-      
-      // تحويل إلى صورة وتنزيلها
-      const dataURL = canvas.toDataURL(`image/${fileFormat}`, 1.0);
-      const link = document.createElement('a');
-      link.href = dataURL;
-      link.download = `${fileName}.${fileFormat}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      toast({
-        title: "تم التصدير بنجاح",
-        description: "تم حفظ التصميم بنجاح"
-      });
+      }
     } catch (error) {
       console.error("Export error:", error);
       toast({
@@ -514,7 +693,7 @@ const CustomDesignPage = () => {
                       <CardTitle className="text-lg">الأدوات</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-2">
                         <Button variant="outline" className="flex flex-col h-auto py-3" onClick={handleAddText}>
                           <Text className="h-5 w-5 mb-1" />
                           <span>إضافة نص</span>
@@ -527,208 +706,255 @@ const CustomDesignPage = () => {
                           variant="outline" 
                           className="flex flex-col h-auto py-3"
                           onClick={handleRemoveElement}
-                          disabled={activeTextId === null}
+                          disabled={activeElementId === null}
                         >
                           <Trash className="h-5 w-5 mb-1" />
                           <span>حذف العنصر</span>
+                        </Button>
+                        <Button variant="outline" className="flex flex-col h-auto py-3" onClick={() => handleAddLogo("square")}>
+                          <Square className="h-5 w-5 mb-1" />
+                          <span>شعار مربع</span>
+                        </Button>
+                        <Button variant="outline" className="flex flex-col h-auto py-3" onClick={() => handleAddLogo("horizontal")}>
+                          <MoveHorizontal className="h-5 w-5 mb-1" />
+                          <span>شعار أفقي</span>
                         </Button>
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Text Editing Options */}
-                {activeTextId !== null && (
+                {/* Element Editing Options */}
+                {activeElementId !== null && (
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">تحرير النص</CardTitle>
+                      <CardTitle className="text-lg">تحرير العنصر</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div>
-                        <Label htmlFor="textContent">محتوى النص</Label>
-                        <Textarea
-                          id="textContent"
-                          value={textContent}
-                          onChange={handleTextChange}
-                          className="mt-1"
-                          rows={3}
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="fontSize">حجم الخط</Label>
-                        <div className="flex items-center mt-1">
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="icon"
-                            onClick={() => {
-                              const newSize = Math.max(8, fontSize - 2);
-                              setFontSize(newSize);
-                              updateActiveTextStyle('size', newSize);
-                            }}
-                          >
-                            <span className="text-lg">-</span>
-                          </Button>
-                          <Input
-                            id="fontSize"
-                            type="number"
-                            min="8"
-                            max="120"
-                            value={fontSize}
-                            className="w-16 text-center mx-2"
-                            onChange={(e) => {
-                              const newSize = parseInt(e.target.value);
-                              setFontSize(newSize);
-                              updateActiveTextStyle('size', newSize);
-                            }}
-                          />
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="icon"
-                            onClick={() => {
-                              const newSize = Math.min(120, fontSize + 2);
-                              setFontSize(newSize);
-                              updateActiveTextStyle('size', newSize);
-                            }}
-                          >
-                            <span className="text-lg">+</span>
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="font">نوع الخط</Label>
-                        <Select 
-                          value={selectedFont}
-                          onValueChange={(val) => {
-                            setSelectedFont(val);
-                            updateActiveTextStyle('font', val);
-                          }}
-                        >
-                          <SelectTrigger id="font" className="mt-1">
-                            <SelectValue placeholder="اختر نوع الخط" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {fontOptions.map((font) => (
-                              <SelectItem key={font.value} value={font.value}>{font.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label>محاذاة النص</Label>
-                        <div className="grid grid-cols-3 gap-2 mt-1">
-                          <Button
-                            type="button"
-                            variant={textAlign === "right" ? "default" : "outline"}
-                            className="w-full"
-                            onClick={() => {
-                              setTextAlign("right");
-                              updateActiveTextStyle('align', 'right');
-                            }}
-                          >
-                            يمين
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={textAlign === "center" ? "default" : "outline"}
-                            className="w-full"
-                            onClick={() => {
-                              setTextAlign("center");
-                              updateActiveTextStyle('align', 'center');
-                            }}
-                          >
-                            وسط
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={textAlign === "left" ? "default" : "outline"}
-                            className="w-full"
-                            onClick={() => {
-                              setTextAlign("left");
-                              updateActiveTextStyle('align', 'left');
-                            }}
-                          >
-                            يسار
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label>لون النص</Label>
-                        <div className="grid grid-cols-3 gap-2 mt-1">
-                          {colorOptions.map((color) => (
-                            <button
-                              key={color.value}
-                              type="button"
-                              className={`w-full h-8 rounded border ${textColor === color.value ? 'ring-2 ring-primary' : ''}`}
-                              style={{ backgroundColor: color.value }}
-                              onClick={() => {
-                                setTextColor(color.value);
-                                updateActiveTextStyle('color', color.value);
-                              }}
-                              title={color.label}
+                      {elements.find(e => e.id === activeElementId)?.type === "text" ? (
+                        // تحرير النص
+                        <>
+                          <div>
+                            <Label htmlFor="textContent">محتوى النص</Label>
+                            <Textarea
+                              id="textContent"
+                              value={textContent}
+                              onChange={handleTextChange}
+                              className="mt-1"
+                              rows={3}
                             />
-                          ))}
-                        </div>
-                      </div>
+                          </div>
 
-                      <div>
-                        <Label>تأثيرات النص</Label>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          <Button
-                            type="button"
-                            variant={textBold ? "default" : "outline"}
-                            className="w-auto px-3"
-                            onClick={() => {
-                              const newValue = !textBold;
-                              setTextBold(newValue);
-                              updateActiveTextStyle('bold', newValue);
-                            }}
-                          >
-                            عريض
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={textItalic ? "default" : "outline"}
-                            className="w-auto px-3"
-                            onClick={() => {
-                              const newValue = !textItalic;
-                              setTextItalic(newValue);
-                              updateActiveTextStyle('italic', newValue);
-                            }}
-                          >
-                            مائل
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={textUnderline ? "default" : "outline"}
-                            className="w-auto px-3"
-                            onClick={() => {
-                              const newValue = !textUnderline;
-                              setTextUnderline(newValue);
-                              updateActiveTextStyle('underline', newValue);
-                            }}
-                          >
-                            تسطير
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={textShadow ? "default" : "outline"}
-                            className="w-auto px-3"
-                            onClick={() => {
-                              const newValue = !textShadow;
-                              setTextShadow(newValue);
-                              updateActiveTextStyle('shadow', newValue);
-                            }}
-                          >
-                            ظل
-                          </Button>
+                          <div>
+                            <Label htmlFor="fontSize">حجم الخط</Label>
+                            <div className="flex items-center mt-1">
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                size="icon"
+                                onClick={() => {
+                                  const newSize = Math.max(8, fontSize - 2);
+                                  setFontSize(newSize);
+                                  updateActiveTextStyle('size', newSize);
+                                }}
+                              >
+                                <span className="text-lg">-</span>
+                              </Button>
+                              <Input
+                                id="fontSize"
+                                type="number"
+                                min="8"
+                                max="120"
+                                value={fontSize}
+                                className="w-16 text-center mx-2"
+                                onChange={(e) => {
+                                  const newSize = parseInt(e.target.value);
+                                  setFontSize(newSize);
+                                  updateActiveTextStyle('size', newSize);
+                                }}
+                              />
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                size="icon"
+                                onClick={() => {
+                                  const newSize = Math.min(120, fontSize + 2);
+                                  setFontSize(newSize);
+                                  updateActiveTextStyle('size', newSize);
+                                }}
+                              >
+                                <span className="text-lg">+</span>
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="font">نوع الخط</Label>
+                            <Select 
+                              value={selectedFont}
+                              onValueChange={(val) => {
+                                setSelectedFont(val);
+                                updateActiveTextStyle('font', val);
+                              }}
+                            >
+                              <SelectTrigger id="font" className="mt-1">
+                                <SelectValue placeholder="اختر نوع الخط" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {fontOptions.map((font) => (
+                                  <SelectItem key={font.value} value={font.value}>{font.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Label>محاذاة النص</Label>
+                            <div className="grid grid-cols-3 gap-2 mt-1">
+                              <Button
+                                type="button"
+                                variant={textAlign === "right" ? "default" : "outline"}
+                                className="w-full"
+                                onClick={() => {
+                                  setTextAlign("right");
+                                  updateActiveTextStyle('align', 'right');
+                                }}
+                              >
+                                يمين
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={textAlign === "center" ? "default" : "outline"}
+                                className="w-full"
+                                onClick={() => {
+                                  setTextAlign("center");
+                                  updateActiveTextStyle('align', 'center');
+                                }}
+                              >
+                                وسط
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={textAlign === "left" ? "default" : "outline"}
+                                className="w-full"
+                                onClick={() => {
+                                  setTextAlign("left");
+                                  updateActiveTextStyle('align', 'left');
+                                }}
+                              >
+                                يسار
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label>لون النص</Label>
+                            <div className="grid grid-cols-3 gap-2 mt-1">
+                              {colorOptions.map((color) => (
+                                <button
+                                  key={color.value}
+                                  type="button"
+                                  className={`w-full h-8 rounded border ${textColor === color.value ? 'ring-2 ring-primary' : ''}`}
+                                  style={{ backgroundColor: color.value }}
+                                  onClick={() => {
+                                    setTextColor(color.value);
+                                    updateActiveTextStyle('color', color.value);
+                                  }}
+                                  title={color.label}
+                                />
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label>تأثيرات النص</Label>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              <Button
+                                type="button"
+                                variant={textBold ? "default" : "outline"}
+                                className="w-auto px-3"
+                                onClick={() => {
+                                  const newValue = !textBold;
+                                  setTextBold(newValue);
+                                  updateActiveTextStyle('bold', newValue);
+                                }}
+                              >
+                                عريض
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={textItalic ? "default" : "outline"}
+                                className="w-auto px-3"
+                                onClick={() => {
+                                  const newValue = !textItalic;
+                                  setTextItalic(newValue);
+                                  updateActiveTextStyle('italic', newValue);
+                                }}
+                              >
+                                مائل
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={textUnderline ? "default" : "outline"}
+                                className="w-auto px-3"
+                                onClick={() => {
+                                  const newValue = !textUnderline;
+                                  setTextUnderline(newValue);
+                                  updateActiveTextStyle('underline', newValue);
+                                }}
+                              >
+                                تسطير
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={textShadow ? "default" : "outline"}
+                                className="w-auto px-3"
+                                onClick={() => {
+                                  const newValue = !textShadow;
+                                  setTextShadow(newValue);
+                                  updateActiveTextStyle('shadow', newValue);
+                                }}
+                              >
+                                ظل
+                              </Button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        // تحرير الشعار
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="logoType">نوع الشعار</Label>
+                            <div className="text-sm mt-1">
+                              {(elements.find(e => e.id === activeElementId) as LogoElement)?.logoType === "square" ? "شعار مربع" : "شعار أفقي"}
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="logoOpacity">شفافية الشعار</Label>
+                            <Slider 
+                              id="logoOpacity" 
+                              min={0} 
+                              max={1} 
+                              step={0.01} 
+                              defaultValue={[(elements.find(e => e.id === activeElementId) as ElementBase)?.opacity || 1]} 
+                              onValueChange={handleSetOpacity}
+                              className="mt-2"
+                            />
+                          </div>
+                          
+                          <div className="pt-2">
+                            <Button 
+                              variant="outline" 
+                              className="w-full" 
+                              onClick={handleRemoveElement}
+                            >
+                              <Trash className="h-4 w-4 ml-2" />
+                              حذف الشعار
+                            </Button>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -812,69 +1038,132 @@ const CustomDesignPage = () => {
                             crossOrigin="anonymous"
                           />
                           
-                          {/* Text Elements */}
-                          {textElements.map((text) => (
-                            <div 
-                              key={text.id}
-                              className={`absolute cursor-move ${activeTextId === text.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
-                              style={{
-                                left: `${text.x}px`,
-                                top: `${text.y}px`,
-                                fontFamily: text.font,
-                                fontSize: `${text.size}px`,
-                                color: text.color,
-                                textAlign: text.align,
-                                direction: text.direction,
-                                fontWeight: text.bold ? 'bold' : 'normal',
-                                fontStyle: text.italic ? 'italic' : 'normal',
-                                textDecoration: text.underline ? 'underline' : 'none',
-                                textShadow: text.shadow ? `1px 1px 2px ${text.shadowColor}` : 'none',
-                                backgroundColor: text.backgroundColor !== 'transparent' ? text.backgroundColor : 'transparent',
-                                WebkitTextStroke: text.stroke ? `1px ${text.strokeColor}` : 'none',
-                                padding: '4px',
-                                width: text.width ? `${text.width}px` : 'auto',
-                                minWidth: '30px',
-                                minHeight: '20px',
-                                zIndex: 20
-                              }}
-                              onMouseDown={(e) => handleTextMouseDown(e, text.id)}
-                            >
-                              {text.content || "نص جديد"}
-                              
-                              {/* Resize handle - only shown when element is active */}
-                              {activeTextId === text.id && (
-                                <div className="absolute bottom-0 right-0 w-5 h-5 bg-primary opacity-50 cursor-nwse-resize"
-                                    onMouseDown={(e) => {
-                                      e.stopPropagation();
-                                      const startWidth = text.width || 200;
-                                      const startHeight = text.height || 50;
-                                      const startX = e.clientX;
-                                      const startY = e.clientY;
-                                      
-                                      const handleMouseMove = (moveEvent: MouseEvent) => {
-                                        const dx = moveEvent.clientX - startX;
-                                        const dy = moveEvent.clientY - startY;
-                                        const newWidth = startWidth + dx;
-                                        const newHeight = startHeight + dy;
-                                        
-                                        resizeTextElement(
-                                          Math.max(30, newWidth), 
-                                          Math.max(20, newHeight)
-                                        );
-                                      };
-                                      
-                                      const handleMouseUp = () => {
-                                        document.removeEventListener('mousemove', handleMouseMove);
-                                        document.removeEventListener('mouseup', handleMouseUp);
-                                      };
-                                      
-                                      document.addEventListener('mousemove', handleMouseMove);
-                                      document.addEventListener('mouseup', handleMouseUp);
-                                    }}
-                                ></div>
-                              )}
-                            </div>
-                          ))}
+                          {/* Design Elements */}
+                          {elements.map((element) => {
+                            if (element.type === "text") {
+                              return (
+                                <div 
+                                  key={element.id}
+                                  data-element-id={element.id}
+                                  className={`absolute cursor-move ${activeElementId === element.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                                  style={{
+                                    left: `${element.x}px`,
+                                    top: `${element.y}px`,
+                                    fontFamily: element.font,
+                                    fontSize: `${element.size}px`,
+                                    color: element.color,
+                                    textAlign: element.align as "left" | "center" | "right",
+                                    direction: element.direction as "rtl" | "ltr",
+                                    fontWeight: element.bold ? 'bold' : 'normal',
+                                    fontStyle: element.italic ? 'italic' : 'normal',
+                                    textDecoration: element.underline ? 'underline' : 'none',
+                                    textShadow: element.shadow ? `1px 1px 2px ${element.shadowColor}` : 'none',
+                                    backgroundColor: element.backgroundColor !== 'transparent' ? element.backgroundColor : 'transparent',
+                                    WebkitTextStroke: element.stroke ? `1px ${element.strokeColor}` : 'none',
+                                    padding: '4px',
+                                    width: element.width ? `${element.width}px` : 'auto',
+                                    minWidth: '30px',
+                                    minHeight: '20px',
+                                    opacity: element.opacity,
+                                    zIndex: 20
+                                  }}
+                                  onMouseDown={(e) => handleElementMouseDown(e, element.id)}
+                                >
+                                  {element.content}
+                                  
+                                  {/* Resize handle - only shown when element is active */}
+                                  {activeElementId === element.id && (
+                                    <div className="absolute bottom-0 right-0 w-5 h-5 bg-primary opacity-50 cursor-nwse-resize"
+                                        onMouseDown={(e) => {
+                                          e.stopPropagation();
+                                          const startWidth = element.width || 200;
+                                          const startHeight = element.height || 50;
+                                          const startX = e.clientX;
+                                          const startY = e.clientY;
+                                          
+                                          const handleMouseMove = (moveEvent: MouseEvent) => {
+                                            const dx = moveEvent.clientX - startX;
+                                            const dy = moveEvent.clientY - startY;
+                                            const newWidth = startWidth + dx;
+                                            const newHeight = startHeight + dy;
+                                            
+                                            resizeElement(
+                                              Math.max(30, newWidth), 
+                                              Math.max(20, newHeight)
+                                            );
+                                          };
+                                          
+                                          const handleMouseUp = () => {
+                                            document.removeEventListener('mousemove', handleMouseMove);
+                                            document.removeEventListener('mouseup', handleMouseUp);
+                                          };
+                                          
+                                          document.addEventListener('mousemove', handleMouseMove);
+                                          document.addEventListener('mouseup', handleMouseUp);
+                                        }}
+                                    ></div>
+                                  )}
+                                </div>
+                              );
+                            } else if (element.type === "logo") {
+                              return (
+                                <div 
+                                  key={element.id}
+                                  data-element-id={element.id}
+                                  className={`absolute cursor-move ${activeElementId === element.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                                  style={{
+                                    left: `${element.x}px`,
+                                    top: `${element.y}px`,
+                                    width: `${element.width}px`,
+                                    height: `${element.height}px`,
+                                    opacity: element.opacity
+                                  }}
+                                  onMouseDown={(e) => handleElementMouseDown(e, element.id)}
+                                >
+                                  <img 
+                                    src={element.source} 
+                                    alt="شعار"
+                                    className="w-full h-full object-contain"
+                                    crossOrigin="anonymous"
+                                  />
+                                  
+                                  {/* Resize handle - only shown when element is active */}
+                                  {activeElementId === element.id && (
+                                    <div className="absolute bottom-0 right-0 w-5 h-5 bg-primary opacity-50 cursor-nwse-resize"
+                                        onMouseDown={(e) => {
+                                          e.stopPropagation();
+                                          const startWidth = element.width || 100;
+                                          const startHeight = element.height || 100;
+                                          const startX = e.clientX;
+                                          const startY = e.clientY;
+                                          
+                                          const handleMouseMove = (moveEvent: MouseEvent) => {
+                                            const dx = moveEvent.clientX - startX;
+                                            const dy = moveEvent.clientY - startY;
+                                            const newWidth = startWidth + dx;
+                                            const newHeight = startHeight + dy;
+                                            
+                                            resizeElement(
+                                              Math.max(30, newWidth), 
+                                              Math.max(20, newHeight)
+                                            );
+                                          };
+                                          
+                                          const handleMouseUp = () => {
+                                            document.removeEventListener('mousemove', handleMouseMove);
+                                            document.removeEventListener('mouseup', handleMouseUp);
+                                          };
+                                          
+                                          document.addEventListener('mousemove', handleMouseMove);
+                                          document.addEventListener('mouseup', handleMouseUp);
+                                        }}
+                                    ></div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })}
                         </div>
                       </div>
                     )}
